@@ -75,7 +75,7 @@ int is_binary_vr (char *VR);
 int is_vector_vr (char *VR);
 void print_value (char* data, char *VR, uint32_t length);
 size_t seek_undefined (char *data, uint16_t stop_code);
-char * print_seq (char *data, int32_t length);
+char * print_seq (char *data, uint32_t length);
 char * next_tag_explicit (char *data);
 char * print_data_set(char *data, size_t size, int level);
 

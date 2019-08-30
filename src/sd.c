@@ -183,10 +183,10 @@ seek_undef (char *data, uint16_t stop_code)
 
 
 char *
-print_seq (char *data, int32_t length)
+print_seq (char *data, uint32_t length)
 {
 	data += 2;
-	uint32_t length = pop4(&data);
+	length = pop4(&data);
 	if (is_undefined(length)) {
 		printf("undefined\n");
 		length = seek_undef(data, SEQ_STOP);
@@ -260,7 +260,7 @@ print_data_set(char *data, size_t size, int level)
 {
 	char *cur = data;  
 	while (cur < data + size) {
-		printf("%08x/%08x: ", cur, data+size);
+		//printf("%08x/%08x: ", cur, data+size);
 		cur = print_data_elem(cur);
 	}
 }
