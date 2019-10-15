@@ -82,9 +82,19 @@ is_vector_vr (char *VR)
 }
 
 
-int is_sequence (const char *VR) { return *((int16_t*)VR) == VR_SQ; }
+int 
+is_sequence (const char *VR) 
+{ 
+	return *((int16_t*)VR) == VR_SQ; 
+}
 
-int is_undefined (const int32_t length) { return length == 0xffffffff; }
+
+int 
+is_undefined (const int32_t length) 
+{ 
+	return length == 0xffffffff; 
+}
+
 
 int 
 is_binary_vr (char *VR)
@@ -155,6 +165,7 @@ format_string (char *VR)
 	}
 }
 
+
 size_t
 seek_undef (char *data, uint16_t stop_code)
 {
@@ -182,9 +193,36 @@ seek_undef (char *data, uint16_t stop_code)
 }
 
 
-char *
-print_seq (char *data, uint32_t length)
+
+void
+print_data_element (char* data, uint16_t group, uint16_t element, char *VR, uint32_t length)
 {
+	printf("(%04x,%04x) %c%c [", group, element, VR[0], VR[1]);
+	if (is_binary_vr(VR)) {
+		if (is_vector_vr(VR)) {
+			int n = length > 6 ? 6 : length;
+			for (int i = 0; i < n; ++i)
+				printf(format_string(VR), data[i]);
+		} else
+			printf(format_string(VR), data);
+	} else {  /* must be string */
+		printf("%.*s", length, data);
+	}
+	printf("]  # %d\n", length);
+}
+
+
+char * 
+parse_sequence (char *data, uint32_t length)
+{
+	if (is_undefined(length)) {
+		printf(" <SEQ> ]  # undef\n");
+	} else {
+		printf("<SEQ length:%d>", length);
+
+	}
+
+	length = parse_data_set(cur, length, level + 1);
 	data += 2;
 	length = pop4(&data);
 	if (is_undefined(length)) {
@@ -196,74 +234,50 @@ print_seq (char *data, uint32_t length)
 	return data;
 }
 
+
 char *
-print_data_elem (char *data)
+parse_data_set(char *data, size_t size, int level)
 {
-	/* read and parse next tag in explicit VR encoding 
-	 * TODO: handle implicit VR 
-	 * */
-
-
-	// read g,e,vr
-	uint16_t group = pop2(&data);
-	uint16_t element = pop2(&data);
-	char *VR = data;
-	data += 2;
-
-	// read length
+	// TODO: handle implicit VR 
+	// Data Elements with a group of 0000, 0002 and 0006 shall not be present
+	// within Sequence Items.
+	//
 	uint32_t length;
-
-	// TODO: use this instead if faster...
-	//length = pop2(&data);
-	//if (length == 0) length = pop4(&data);
-
-	if (is_big_vr(VR)) {
-		data += 2;
-		length = pop4(&data);
-	} else
-		length = pop2(&data);
-
-	printf("(%04x,%04x) %c%c [", group, element, VR[0], VR[1]);
-	if (is_undefined(length))
-		printf(" <SEQ> ]  # undef\n");
-	else {
-		print_value(data, VR, length);
-		printf("]  # %d\n", length);
-	}
-
-	if (is_sequence(VR)) 
-		length = print_seq(data, length);
-
-	return data + length;
-}
-
-void
-print_value (char* data, char *VR, uint32_t length)
-{
-	if (is_sequence(VR)) {
-		printf("<SEQ length:%d>", length);
-	} else if (is_binary_vr(VR)) {
-		if (is_vector_vr(VR)) {
-			int n = length > 6 ? 6 : length;
-			for (int i = 0; i < n; ++i)
-				printf(format_string(VR), data[i]);
-		} else
-			printf(format_string(VR), data);
-	} else {  /* must be string */
-		printf("%.*s", length, data);
-	}
-}
-
-
-char *
-print_data_set(char *data, size_t size, int level)
-{
 	char *cur = data;  
-	while (cur < data + size) {
+
+	while (cur < data + size) 
+	{
 		//printf("%08x/%08x: ", cur, data+size);
-		cur = print_data_elem(cur);
+
+		uint16_t group = pop2(&data);
+		uint16_t element = pop2(&data);
+		char *VR = data;
+		data += 2;
+
+		// TODO: use this instead if faster...
+		//length = pop2(&data);
+		//if (length == 0) length = pop4(&data);
+
+		if (is_big_vr(VR)) { /* read length */
+			data += 2;
+			length = pop4(&data);
+		} else
+			length = pop2(&data);
+
+		if (is_sequence(VR))  /* handle sequence encoding */
+		{   
+			// TODO: decide what to return, and which pointer to advance
+			cur = parse_sequence(cur);
+		} 
+		else /* regular tags ... just print */
+		{  
+			print_data_element(data, group, element, VR, length);
+			cur += length;
+		}
+
 	}
 }
+
 
 int 
 main (int argc, char *argv[])
@@ -281,9 +295,9 @@ main (int argc, char *argv[])
 	_errchk(read(fd, data, st.st_size), -1);
 	close(fd);
 
-	// add 132 to skip padding and magic
-	int level = 0;
-	print_data_set(data + 132, st.st_size, level);
+	int zero_header_length = 132;
+	int level = 0;  // top level
+	parse_data_set(data + zero_header_length, st.st_size, level);
 
 	//print_vr_magics();
 
