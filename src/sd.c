@@ -166,37 +166,11 @@ format_string (char *VR)
 }
 
 
-size_t
-seek_undef (char *data, uint16_t stop_code)
-{
-	char *data_head = data;
-	uint32_t s, t;
-	int depth = 0;
-	while (1) {
-		t = pop4(&data);
-		//printf("%08x> %08x (+%x +%x -%x)\n", data, t, ITEM_START, ITEM_STOP, SEQ_STOP);
-		if (t == SEQ_STOP && depth == 0){
-			printf("000000000000\n");
-			break;
-		} else if (t == ITEM_START) {
-			depth++;
-			printf("++ descending to %d\n", depth);
-			//data = print_sequence(data);
-		} else if (t == ITEM_STOP || t == SEQ_STOP) {
-			depth--;
-			printf("-- ascending to %d\n", depth);
-		}
-		//data -= 2; // backtrack two bytes
-	}
-	data += 4; // skip final 0x00000000
-	return data - data_head;
-}
-
-
-
 void
-print_data_element (char* data, uint16_t group, uint16_t element, char *VR, uint32_t length)
+print_data_element (char* data, uint16_t group, uint16_t element, char *VR, uint32_t length, int level)
 {
+	printf("DEBUG: print element of length %08x at level %d\n", length, level);
+//	printf("%*c", ' ', level > 0 ? level : 1);
 	printf("(%04x,%04x) %c%c [", group, element, VR[0], VR[1]);
 	if (is_binary_vr(VR)) {
 		if (is_vector_vr(VR)) {
@@ -213,46 +187,63 @@ print_data_element (char* data, uint16_t group, uint16_t element, char *VR, uint
 
 
 char * 
-parse_sequence (char *data, uint32_t length)
+parse_sequence (char *data, uint32_t length, int level)
 {
-	if (is_undefined(length)) {
-		printf(" <SEQ> ]  # undef\n");
-	} else {
-		printf("<SEQ length:%d>", length);
-
+	// Data Elements with a group of 0000, 0002 and 0006 shall not be present
+	// within Sequence Items.
+	printf("DEBUG: parse sequence of size %u at level %d\n", length, level);
+	const char *start = data;
+	while (1) {
+		uint32_t tag = pop4(&data);
+		printf("DEBUG: read tag %08x\n", tag);
+		if (is_undefined(length) && tag == SEQ_STOP) {
+			printf("DEBUG: found SEQ_STOP tag in undefined-length sequence, returning ...\n");
+			data += 4;
+			return data;
+		}
+		if (tag == ITEM_START) {
+			uint32_t length = pop4(&data);
+			printf("DEBUG: item length %08x\n", length);
+			parse_data_set(data, length, level + 1);
+		} else {
+			fprintf(stderr, "ERROR: Nonsensical tag %u\n", tag);
+			return NULL;
+		}
+		printf("DEBUG: read %08x bytes so far ...\n", data - start);
+		if (data - start >= length) {  /* defined length case */
+			printf("DEBUG: read to end of defined length sequence, returning ...\n");
+			return data;
+		}
 	}
-
-	length = parse_data_set(cur, length, level + 1);
-	data += 2;
-	length = pop4(&data);
-	if (is_undefined(length)) {
-		printf("undefined\n");
-		length = seek_undef(data, SEQ_STOP);
-	}
-	data += length + 4;
-	printf("SEQUENCE length %d ", length);
-	return data;
+	//printf(" <SEQ> ]  # undef\n");
+	//printf("<SEQ length:%d>", length);
 }
 
 
 char *
 parse_data_set(char *data, size_t size, int level)
 {
-	// TODO: handle implicit VR 
-	// Data Elements with a group of 0000, 0002 and 0006 shall not be present
-	// within Sequence Items.
-	//
+	// TODO: handle implicit VR
+	// TODO: handle undefined length, looking for ITEM_STOP tag
 	uint32_t length;
-	char *cur = data;  
+	char *start = data;
+	printf("DEBUG: parsing data set of size %lu at level %d\n", size, level);
 
-	while (cur < data + size) 
+	while (1)
 	{
 		//printf("%08x/%08x: ", cur, data+size);
-
-		uint16_t group = pop2(&data);
-		uint16_t element = pop2(&data);
+		uint32_t tag = pop4(&data);
+		printf("DEBUG: read tag %08x\n", tag);
+		if (is_undefined(length) && tag == ITEM_STOP) {
+			printf("DEBUG: found ITEM_STOP tag in undefined-length data set, returning ...\n");
+			return data;
+		}
+		uint16_t group = (tag & 0xffff0000) >> 16;
+		uint16_t element = (tag & 0x0000ffff);
+		printf("DEBUG: read group %04x element %04x\n", group, element);
 		char *VR = data;
 		data += 2;
+		printf("DEBUG: read VR %c%c\n", VR[0], VR[1]);
 
 		// TODO: use this instead if faster...
 		//length = pop2(&data);
@@ -261,18 +252,27 @@ parse_data_set(char *data, size_t size, int level)
 		if (is_big_vr(VR)) { /* read length */
 			data += 2;
 			length = pop4(&data);
-		} else
+			printf("DEBUG: read length %u\n", length);
+		} else {
 			length = pop2(&data);
+			printf("DEBUG: read length %u\n", length);
+		}
 
 		if (is_sequence(VR))  /* handle sequence encoding */
-		{   
+		{
 			// TODO: decide what to return, and which pointer to advance
-			cur = parse_sequence(cur);
-		} 
+			data = parse_sequence(data, length, level);
+		}
 		else /* regular tags ... just print */
-		{  
-			print_data_element(data, group, element, VR, length);
-			cur += length;
+		{
+			print_data_element(data, group, element, VR, length, level);
+			data += length;
+		}
+
+		printf("DEBUG: read %u bytes so far...\n", data - start);
+		if (data - start >= size) {
+			printf("DEBUG: reached end of %08x length data set, returning ...\n", length);
+			return data;
 		}
 
 	}
