@@ -1,4 +1,3 @@
-# group,element,VR,keyword,VM,name
 0000,0000,UL,CommandGroupLength,1,"Command Group Length"
 0000,0001,UL,CommandLengthToEnd,1,"Command Length to End"
 0000,0002,UI,AffectedSOPClassUID,1,"Affected SOP Class UID"

@@ -53,9 +53,18 @@ const uint32_t SEQ_STOP   = 0xe0ddfffeUL;
 //#define _pop4(x)  *((uint32_t*)(x));(x)+=4;
 //#define _pop2(x)  *((uint16_t*)(x));(x)+=2;
 
-union word {
+union VR {
 	uint16_t w;
 	char c[2];
+};
+
+
+union tag {
+	uint32_t t;
+	struct { 
+		uint16_t group;
+		uint16_t element;
+	} ge;
 };
 
 union quad {
