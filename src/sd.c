@@ -8,22 +8,46 @@
 #include "sd.h"
 #include "dict.h"
 
+#define dprint  if(DEBUG)printf
+
+#define BINARY_DICT_SEARCH 1
+
+static int DEBUG = 0;
+static int SKIP_PRIVATE = 0;
+
+
 char *
 dict_lookup (const uint16_t group, const uint16_t element)
 {
+#if BINARY_DICT_SEARCH
 	// TODO: binary lookup for better speed
+	int min = 0, max = DICTSIZE;
+	while (1) {
+		int i = (min + max) / 2;
+		//printf("min:%d max:%d i:%d\n", min, max, i);
+		if (group < dict[i].group)
+			max = i;
+		else if (group > dict[i].group)
+			min = i;	
+		else if (element < dict[i].element)
+			max = i;
+		else if (element > dict[i].element)
+			min = i;
+		else 
+			return dict[i].keyword;
+		if (min +1 == max)
+			return NULL;
+	}
+#else
 	for (int i = 0; i < DICTSIZE; ++i) {
 		if (dict[i].group != group || dict[i].element != element)
 			continue;
 		return dict[i].keyword;
 	}
-	return "";
+#endif
+	return NULL;  // either private or unknown
 }
 
-
-int DEBUG = 0;
-
-#define dprint  if(DEBUG)printf
 
 uint16_t
 pop_u16 (char **x)   // TODO: see if macro faster
@@ -100,18 +124,10 @@ is_vector_vr (char *VR)
 }
 
 
-int 
-is_sequence (const char *VR) 
-{ 
-	return *((int16_t*)VR) == VR_SQ; 
-}
+int is_sequence (const char *VR) { return *((int16_t*)VR) == VR_SQ; }
 
 
-int 
-is_undefined (const int32_t length) 
-{ 
-	return length == 0xffffffff; 
-}
+int is_undefined (const int32_t length) { return length == 0xffffffff; }
 
 
 int 
@@ -154,53 +170,71 @@ is_float_vr (char *VR)
 	}
 }
 
-char *
-format_string (char *VR)
-{
-	int16_t n = *((int16_t*)VR);  // cast char[2] to int16
-	switch (n) {
-		case VR_FL:
-		case VR_OF:
-		case VR_FD:
-		case VR_OD:
-			return "%f";
-			break;
-		case VR_SL:
-		case VR_SS:
-			return "%d";
-			break;
-		case VR_UL:
-		case VR_US:
-			return "%u";
-			break;
-		case VR_AT:
-		case VR_OB:
-		case VR_OW:
-		case VR_UN:
-			return "%x";
-			break;
-		default:
-			return "%s";
-	}
-}
 
 
 void
 print_data_element (char* data, uint16_t group, uint16_t element, char *VR, uint32_t length, int level)
 {
+	char *keyword = dict_lookup(group, element);
+	if (SKIP_PRIVATE && keyword == NULL) // skip private tags
+		return;
 	dprint("D: DE print length %08x at level %d\n", length, level);
 	printf("%*s", 4*level, " ");
-	printf("(%04x,%04x) %c%c %-40s [", group, element, VR[0], VR[1], dict_lookup(group, element));
-	if (is_binary_vr(VR)) {
-		if (is_vector_vr(VR)) {
-			int n = length > 6 ? 6 : length;
-			for (int i = 0; i < n; ++i)
-				printf(format_string(VR), data[i]);
-		} else
-			printf(format_string(VR), data);
-	} else {  /* must be string */
-		printf("%.*s", length, data);
+	printf("(%04x,%04x) %c%c %-40s [", group, element, VR[0], VR[1], 
+			keyword != NULL ? keyword : "Private");
+	int16_t nVR = *((int16_t*)VR);  // cast char[2] to int16 for matching
+	int veclen = length > 6 ? 6 : length;
+	switch (nVR) {
+		// TODO: handle OF,OD properly
+		case VR_OF:
+			for (int i = 0; i < veclen; ++i)
+				printf("%f ", *(float*)data);
+			break;
+		case VR_FL:
+			printf("%f", *(float*)data);
+			break;
+		case VR_OD:
+			for (int i = 0; i < veclen; ++i)
+				printf("%f ", *(double*)data);
+			break;
+		case VR_FD:
+			printf("%f", *(double*)data);
+			break;
+		case VR_SL:
+			printf("%d", *(int32_t*)data);
+			break;
+		case VR_SS:
+			printf("%d", *(int16_t*)data);
+			break;
+		//case VR_UI:
+		//	printf("%s", (char*)data);
+		//	break;
+		case VR_US:
+			printf("%d", *(uint16_t*)data);
+			break;
+		case VR_UL:
+			printf("%d", *(uint32_t*)data);
+			break;
+		case VR_OB:
+			for (int i = 0; i < veclen; ++i)
+				printf("%x ", *(uint8_t*)data);
+			break;
+		case VR_OW:
+			for (int i = 0; i < veclen; ++i)
+				printf("%x ", *(uint16_t*)data);
+			break;
+		case VR_AT:
+			printf("%x", *(uint32_t*)data);
+			break;
+		case VR_UN:
+			for (int i = 0; i < veclen; ++i)
+				printf("%x", *(uint8_t*)data);
+			break;
+		default:
+			printf("%.*s", length, data);
 	}
+	if (is_vector_vr(VR) && length > veclen)
+		printf("...");
 	printf("]  # %d\n", length);
 }
 
@@ -208,6 +242,7 @@ print_data_element (char* data, uint16_t group, uint16_t element, char *VR, uint
 char * 
 parse_sequence (char *data, uint32_t size, int level)
 {
+	// TODO: add assert
 	// Data Elements with a group of 0000, 0002 and 0006 shall not be present
 	// within Sequence Items.
 	dprint("D: SEQ PARSE of size %08x at level %d\n", size, level);
@@ -238,8 +273,6 @@ parse_sequence (char *data, uint32_t size, int level)
 			return data;
 		}
 	}
-	//printf(" <SEQ> ]  # undef\n");
-	//printf("<SEQ length:%d>", length);
 }
 
 
@@ -261,10 +294,12 @@ parse_data_set(char *data, size_t size, int level)
 			data += 4;
 			return data;
 		}
-		union tag t;
-		t.t = tag;
-		uint16_t element = t.ge.element; //(tag & 0xffff0000) >> 16;
-		uint16_t group = t.ge.group; //(tag & 0x0000ffff);
+
+
+		//union tag t; 
+		//t.t = tag;
+		uint16_t element = (tag & 0xffff0000) >> 16;
+		uint16_t group = tag & 0x0000ffff;
 		dprint("D: DS read group %04x element %04x\n", group, element);
 		char *VR = data;
 		data += 2;
@@ -285,7 +320,6 @@ parse_data_set(char *data, size_t size, int level)
 
 		if (is_sequence(VR))  /* handle sequence encoding */
 		{
-			// TODO: decide what to return, and which pointer to advance
 			printf("%*s(%04x,%04x) SQ %-40s\n", 4*level, " ", element, group, dict_lookup(group, element));
 			data = parse_sequence(data, length, level);
 		}
@@ -323,7 +357,8 @@ main (int argc, char *argv[])
 
 	int zero_header_length = 132;
 	int level = 0;  // top level
-	parse_data_set(data + zero_header_length, st.st_size - 132, level);
+	parse_data_set(data + zero_header_length, st
+			.st_size - zero_header_length, level);
 
 	//print_vr_magics();
 
