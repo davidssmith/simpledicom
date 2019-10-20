@@ -1,3 +1,5 @@
-profile execution to find what is so slow
+profile execution to find bottlenecks
+
+translate syntaxes, SOP, etc. UIDs
 
 implement implicit VR

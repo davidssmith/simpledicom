@@ -12,12 +12,10 @@ static bool hide_private = false;
 static int nthreads = 1;
 
 
-char *
-dict_lookup (const uint16_t group, const uint16_t element)
+char * dict_lookup (const uint32_t tag)
 {
-	uint32_t tag = (group << 16) | element;
 	int min = 0, max = DICTSIZE;
-	while (true) {
+	do {
 		int i = (min + max) / 2;
 		if (tag < dict[i].val)
 			max = i;
@@ -25,23 +23,19 @@ dict_lookup (const uint16_t group, const uint16_t element)
 			min = i;	
 		else 
 			return dict[i].keyword;
-		if (min + 1 == max)
-			return NULL;
-	}
+	} while (max - min > 1);
 	return NULL;  // either private or unknown
 }
 
 
-uint16_t
-pop_u16 (char **x)   // TODO: see if macro faster
+uint16_t pop_u16 (char **x)   // TODO: see if macro faster
 {
 	uint16_t n = *(uint16_t*)*x;
 	*x += 2;
 	return n;
 }
 
-uint32_t
-pop_u32 (char **x)
+uint32_t pop_u32 (char **x)
 {
 	uint32_t n = *(uint32_t*)*x;
 	*x += 4;
@@ -49,16 +43,13 @@ pop_u32 (char **x)
 }
 
 
-void 
-_errchk (const int ret, const int errval)
-{
+void _errchk (const int ret, const int errval) {
 	if (ret == errval)
 		perror("sd: ");
 }
 
 
-void
-print_vr_magics ()
+void print_vr_magics ()
 {
 	char all_vrs[] = "AEASSHLODADTTMCSSTLTUTPNISDSUISQSSUSSLULATFLFDOBOWOFUN";
 
@@ -70,72 +61,53 @@ print_vr_magics ()
 	}
 }
 
-bool
-is_big_vr (char *VR)
+bool is_big (char *VR)
 {
 	// VR is too big to print
 	int16_t n = *((int16_t*)VR);  // cast char[2] to int16
 	return (n == VR_SQ || VR[0] == 'O' || n == VR_UN || n == VR_UT);
 }
 
-bool is_vector_vr (const char *VR) { return VR[0] == 'O'; }
+bool is_vector (const char *VR) { return VR[0] == 'O'; }
 bool is_sequence (const char *VR) { return *((int16_t*)VR) == VR_SQ; }
-bool is_undefined (const int32_t length) { return length == 0xffffffff; }
 
-
-bool
-is_binary_vr (const char *VR)
-{
-	if (VR[0] == 'F' || VR[0] == 'O')
-	   return true;
-	int16_t n = *((int16_t*)VR);  // cast char[2] to int16
-	return (n == VR_UL || n == VR_AT || n == VR_SS || n == VR_SL || n == VR_US || n == VR_UN);
-}
-
-
-bool
-is_float_vr (const char *VR)
-{
-	int16_t n = *((int16_t*)VR);  // cast char[2] to int16
-	return (VR[0] == 'F' || n == VR_OF || n == VR_OD);
-}
-
-
+uint16_t grp (const uint32_t tag) { return tag >> 16; }
+uint16_t ele (const uint32_t tag) { return tag & 0xffff; }
 
 void
-print_data_element (const char* const data, const uint16_t group, const uint16_t element, 
+print_data_element (const char* const data, const uint32_t tag,
 		const char *VR, const uint32_t length, const int level)
 {
-	char *keyword = dict_lookup(group, element);
+	char *keyword = dict_lookup(tag);
 
 	if (hide_private && keyword == NULL) // skip private tags
 		return;
 
-	printf("%*s(%04x,%04x) %c%c %-*s [", 4*level, " ", group, element, VR[0], VR[1],
-		40-4*level, keyword != NULL ? keyword : "Private");
+	if (level > 0)
+		printf("%*s", 4*level, " ");
+	printf("(%04x,%04x) %c%c %-*s %6d [", grp(tag), ele(tag), VR[0], VR[1],
+		36-4*level, keyword != NULL ? keyword : "Private", length);
 	int16_t nVR = *((int16_t*)VR);  // cast char[2] to int16 for matching
-	int veclen = length > 6 ? 6 : length;
+	int m = length > 6 ? 6 : length;
 	switch (nVR) {
-		case VR_SQ:
-		case VR_DS:
-		case VR_SH:
-		case VR_CS:
-		case VR_LO:
+		case VR_SQ: 
+			break;
+		case VR_UI:
 			printf("%.*s", length, data);
 			break;
 		case VR_FD:
-			printf("%f", *(double*)data);
+			printf("%g", *(double*)data);
 			break;
 		case VR_OF:
-			for (int i = 0; i < veclen; ++i)
-				printf("%f ", *(float*)data);
+			for (int i = 0; i < m; ++i)
+				printf("%g%*s", *((float*)data+i), i<m-1, ",");
 			break;
 		case VR_FL:
 			printf("%f", *(float*)data);
 			break;
 		case VR_OD:
-			for (int i = 0; i < veclen; ++i)
-				printf("%f ", *(double*)data);
+			for (int i = 0; i < m; ++i)
+				printf("%g%*s", *((double*)data+i), i<m-1, ",");
 			break;
 		case VR_SL:
 			printf("%d", *(int32_t*)data);
@@ -150,97 +122,84 @@ print_data_element (const char* const data, const uint16_t group, const uint16_t
 			printf("%d", *(uint32_t*)data);
 			break;
 		case VR_OB:
-			for (int i = 0; i < veclen; ++i)
-				printf("%x ", *(uint8_t*)data);
+			for (int i = 0; i < m; ++i)
+				printf("%02x%*s", *((uint8_t*)data+i), i<m-1, ",");
 			break;
 		case VR_OW:
-			for (int i = 0; i < veclen; ++i)
-				printf("%x ", *(uint16_t*)data);
+			for (int i = 0; i < m; ++i)
+				printf("%04x%*s", *((uint16_t*)data+i), i<m-1, ",");
 			break;
 		case VR_AT:
-			printf("%x", *(uint32_t*)data);
+			printf("%08x", *(uint32_t*)data);
 			break;
 		case VR_UN:
-			for (int i = 0; i < veclen; ++i)
-				printf("%x", *(uint8_t*)data);
+			for (int i = 0; i < m; ++i)
+				printf("%02x%*s", *(data+i), i<m-1, ",");
 			break;
 		default:
 			printf("%.*s", length, data);
 	}
-	if (is_vector_vr(VR) && length > veclen)
+	if (is_vector(VR) && length > m)
 		printf("...");
-	printf("]  # %d\n", length);
+	printf("]\n");
 }
 
 
-char * 
-parse_sequence (char *data, const uint32_t size, const int level)
+char * parse_sequence (char *data, const uint32_t size, const int level)
 {
-	// TODO: add assert
 	// Data Elements with a group of 0000, 0002 and 0006 shall not be present
 	// within Sequence Items.
 	const char *start = data;
-	while (true) {
+	do {
 		uint32_t tag = pop_u32(&data);
-		if (is_undefined(size) && tag == SEQ_STOP) {
-			//data += 4;
+		if (size == SIZE_UNDEFINED && tag == SEQ_STOP)
 			return data + 4;
-		} else if (tag == ITEM_START) {
+		if (tag == ITEM_START) {
 			uint32_t length = pop_u32(&data);
 			data = parse_data_set(data, length, level + 1);
 		} else {
-			fprintf(stderr, "Nonsensical tag in Sequence: 0x%08x\n", tag);
+			fprintf(stderr, "nonsensical tag in Sequence: 0x%08x\n", tag);
 			return NULL;
 		}
-		if (data >= start + size) /* defined length case */
-			return data;
-	}
+	} while (data < start + size); /* defined length case */
+	return data;
 }
 
 
 char *
-parse_data_set(char *data, const size_t size, const int level)
+parse_data_set (char *data, const size_t size, const int level)
 {
 	// TODO: handle implicit VR
 	uint32_t length;
 	char *start = data;
 
-	while (true) {
-
+	do {
 		uint32_t tag = pop_u32(&data);
 
-		if (is_undefined(size) && tag == ITEM_STOP) {
-			data += 4;
-			return data;
-		}
+		if (size == SIZE_UNDEFINED && tag == ITEM_STOP)
+			return data + 4;
 
-		uint16_t element = (tag & 0xffff0000) >> 16;
-		uint16_t group = tag & 0x0000ffff;
+		// swap about bytes for little endian
+		tag = (tag >> 16) | (tag & 0xffff) << 16;
 		char *VR = data;
 		data += 2;
 
-		// TODO: use this instead if faster...
-		//length = pop_u16(&data);
-		//if (length == 0) length = pop_u32(&data);
-		if (is_big_vr(VR)) { 
+		if (is_big(VR)) {
 			data += 2;
 			length = pop_u32(&data);
-		} else {
+		} else
 			length = pop_u16(&data);
-		}
 
-		if (is_sequence(VR)) { /* handle sequence encoding */
-			printf("%*s(%04x,%04x) SQ %-*s\n", 4*level, " ", group, element,
-				   	40-4*level, dict_lookup(group, element));
+		print_data_element(data, tag, VR, length, level);
+
+		if (is_sequence(VR))
 			data = parse_sequence(data, length, level);
-		} else { /* regular tags ... just print */
-			print_data_element(data, group, element, VR, length, level);
+		else
 			data += length;
-		}
 
-		if (data >= start + size)
-			return data;
-	}
+	} while (data < start + size);
+
+	return data;
 }
 
 

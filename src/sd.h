@@ -77,10 +77,16 @@
 #define VR_UT_BIT 1UL<<27
 #endif
 
+union tag {
+	uint32_t tag;
+	struct { uint16_t g, e; };
+};
 
-const uint32_t ITEM_START    = 0xe000fffeUL;
-const uint32_t ITEM_STOP  = 0xe00dfffeUL;
-const uint32_t SEQ_STOP   = 0xe0ddfffeUL;
+
+const uint32_t ITEM_START    = 0xe000fffe;
+const uint32_t ITEM_STOP  = 0xe00dfffe;
+const uint32_t SEQ_STOP   = 0xe0ddfffe;
+const uint32_t SIZE_UNDEFINED = 0xffffffff;
 
 #define _pop4(x)  *((uint32_t*)(x))
 #define _pop2(x)  *((uint16_t*)(x))
