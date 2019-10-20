@@ -13,7 +13,8 @@
 //#define BINARY_DICT_SEARCH 1
 
 static int DEBUG = 0;
-static int SKIP_PRIVATE = 0;
+static bool hide_keywords = false;
+static bool hide_private = false;
 
 
 char *
@@ -34,13 +35,6 @@ dict_lookup (const uint16_t group, const uint16_t element)
 		if (min + 1 == max)
 			return NULL;
 	}
-	/* linear search
-	for (int i = 0; i < DICTSIZE; ++i) {
-		if (dict[i].val != tag)
-			continue;
-		return dict[i].keyword;
-	}
-	*/
 	return NULL;  // either private or unknown
 }
 
@@ -172,15 +166,16 @@ void
 print_data_element (const char* const data, const uint16_t group, const uint16_t element, 
 		const char *VR, const uint32_t length, const int level)
 {
-	char *keyword = dict_lookup(group, element);
+	char *keyword = hide_keywords ? "" : dict_lookup(group, element);
 
-	if (SKIP_PRIVATE && keyword == NULL) // skip private tags
+	if (hide_private && keyword == NULL) // skip private tags
 		return;
 
 	printf("%*s", 4*level, " ");
-	printf("(%04x,%04x) %c%c %-40s [", group, element, VR[0], VR[1], 
-			keyword != NULL ? keyword : "Private");
-
+	printf("(%04x,%04x) %c%c ", group, element, VR[0], VR[1]);
+	if (!hide_keywords)
+		printf("%-*s ", 40-4*level, keyword != NULL ? keyword : "Private");
+	printf("[");
 	int16_t nVR = *((int16_t*)VR);  // cast char[2] to int16 for matching
 	int veclen = length > 6 ? 6 : length;
 	switch (nVR) {
@@ -292,7 +287,10 @@ parse_data_set(char *data, const size_t size, const int level)
 		}
 
 		if (is_sequence(VR)) { /* handle sequence encoding */
-			printf("%*s(%04x,%04x) SQ %-40s\n", 4*level, " ", group, element, dict_lookup(group, element));
+			printf("%*s(%04x,%04x) SQ ", 4*level, " ", group, element);
+			if (!hide_keywords)
+				printf("%-*s", 40-4*level, dict_lookup(group, element));
+			printf("\n");
 			data = parse_sequence(data, length, level);
 		} else { /* regular tags ... just print */
 			print_data_element(data, group, element, VR, length, level);
@@ -331,6 +329,15 @@ parse_dicom_file (char *filename)
 }
 
 
+void
+print_usage()
+{
+	fprintf(stderr, "Stream DICOM parser and manipulator\n");
+	fprintf(stderr, "\t-h\tthis help\n");
+	fprintf(stderr, "\t-k\tprint keywords\n");
+	fprintf(stderr, "\t-p\tprint private tags\n");
+}
+
 int 
 main (int argc, char *argv[])
 {
@@ -338,7 +345,22 @@ main (int argc, char *argv[])
 		fprintf(stderr, "Usage: sd <dicomfile>\n");
 		return EX_USAGE;
 	}
-	int ret = parse_dicom_file(argv[1]);
+	opterr = 0;
+	int c;
+	while ((c = getopt (argc, argv, "hkpv")) != -1) {
+		switch (c) {
+			case 'k':
+				hide_keywords = true;
+				break;
+			case 'p':
+				hide_private = true;
+				break;
+			case 'h':
+			default:
+				print_usage();
+		}
+	}
+	int ret = parse_dicom_file(argv[optind]);
 	return ret;
 }
 

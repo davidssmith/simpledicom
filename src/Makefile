@@ -1,4 +1,4 @@
-CC=gcc -g -O2
+CC=gcc -O2
 sd : sd.o
 	$(CC) -o sd sd.o
 
