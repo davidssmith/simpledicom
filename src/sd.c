@@ -38,8 +38,8 @@ char * dict_keyword (const uint32_t tag)
 char * dict_VR (const uint32_t tag)
 {
 	int i = dict_lookup(tag);
-	printf("tag=%x i=%d\n", tag, i);
-	return i >= 0 ? dict[i].VR : NULL;
+	//printf("tag=%x i=%d\n", tag, i);
+	return i >= 0 ? dict[i].VR : "OB";
 }
 
 
@@ -86,8 +86,10 @@ bool is_big (char *VR)
 bool is_vector (const char *VR) { return VR[0] == 'O'; }
 bool is_sequence (const char *VR) { return *((int16_t*)VR) == VR_SQ; }
 
+
 uint16_t grp (const uint32_t tag) { return tag >> 16; }
 uint16_t ele (const uint32_t tag) { return tag & 0xffff; }
+bool is_private (const uint32_t tag) { return grp(tag) % 2 == 1; }
 
 void
 print_data_element (const char* const data, const uint32_t tag,
@@ -95,8 +97,10 @@ print_data_element (const char* const data, const uint32_t tag,
 {
 	char *keyword = dict_keyword(tag);
 
-	if (hide_private && keyword == NULL) // skip private tags
+	if (hide_private && (keyword == NULL || is_private(tag))) {// skip private tags
+		printf("SKIP\n");
 		return;
+	}
 
 	if (level > 0)
 		printf("%*s", 4*level, " ");
@@ -115,14 +119,14 @@ print_data_element (const char* const data, const uint32_t tag,
 			break;
 		case VR_OF:
 			for (int i = 0; i < m; ++i)
-				printf("%g%*s", *((float*)data+i), i<m-1, ",");
+				printf("%g%*s", *((float*)data+i), i<m-1, "\\");
 			break;
 		case VR_FL:
 			printf("%f", *(float*)data);
 			break;
 		case VR_OD:
 			for (int i = 0; i < m; ++i)
-				printf("%g%*s", *((double*)data+i), i<m-1, ",");
+				printf("%g%*s", *((double*)data+i), i<m-1, "\\");
 			break;
 		case VR_SL:
 			printf("%d", *(int32_t*)data);
@@ -138,18 +142,18 @@ print_data_element (const char* const data, const uint32_t tag,
 			break;
 		case VR_OB:
 			for (int i = 0; i < m; ++i)
-				printf("%02x%*s", *((uint8_t*)data+i), i<m-1, ",");
+				printf("%02x%*s", *((uint8_t*)data+i), i<m-1, "\\");
 			break;
 		case VR_OW:
 			for (int i = 0; i < m; ++i)
-				printf("%04x%*s", *((uint16_t*)data+i), i<m-1, ",");
+				printf("%04x%*s", *((uint16_t*)data+i), i<m-1, "\\");
 			break;
 		case VR_AT:
 			printf("%08x", *(uint32_t*)data);
 			break;
 		case VR_UN:
 			for (int i = 0; i < m; ++i)
-				printf("%02x%*s", *(data+i), i<m-1, ",");
+				printf("%02x%*s", *(data+i), i<m-1, "\\");
 			break;
 		default:
 			printf("%.*s", length, data);
@@ -197,10 +201,13 @@ parse_data_set (char *data, const size_t size, const int level)
 
 		tag = grp(tag) | ele(tag) << 16; // swap for little endian
 
+		if (in_metadata && grp(tag) > 0x2)
+			in_metadata = false;
+
 		if (implicit_syntax && !in_metadata) {
 			length = pop_u32(&data);
 			VR = dict_VR(tag);
-			printf("dict_VR: %s\n", VR);
+			//printf("%08x dict_VR: %s len:%x\n", tag, VR, length);
 		} else {
 			VR = data;
 			data += 2;
@@ -211,12 +218,9 @@ parse_data_set (char *data, const size_t size, const int level)
 				length = pop_u16(&data);
 		}
 
-		if (in_metadata && grp(tag) > 0x2)
-			in_metadata = false;
-
 		print_data_element(data, tag, VR, length, level);
 
-		if (is_sequence(VR))
+		if (is_sequence(VR) && !is_private(tag))
 			data = parse_sequence(data, length, level);
 		else
 			data += length;
@@ -271,13 +275,16 @@ main (int argc, char *argv[])
 	}
 	opterr = 0;
 	int c;
-	while ((c = getopt (argc, argv, "hpt:v")) != -1) {
+	while ((c = getopt (argc, argv, "hipt:")) != -1) {
 		switch (c) {
 			case 'p':
 				hide_private = true;
 				break;
 			case 't':
 				nthreads = atoi(optarg);
+				break;
+			case 'i':
+				implicit_syntax = true;
 				break;
 			case 'h':
 			default:
