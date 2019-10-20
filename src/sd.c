@@ -8,24 +8,17 @@
 #include "sd.h"
 #include "dict.h"
 
-#define dprint  if(DEBUG)printf
-
-//#define BINARY_DICT_SEARCH 1
-
-static int DEBUG = 0;
-static bool hide_keywords = false;
 static bool hide_private = false;
+static int nthreads = 1;
 
 
 char *
 dict_lookup (const uint16_t group, const uint16_t element)
 {
 	uint32_t tag = (group << 16) | element;
-	//printf("tag=%x\n", tag);
 	int min = 0, max = DICTSIZE;
-	while (1) {
+	while (true) {
 		int i = (min + max) / 2;
-		//printf("min:%d max:%d i:%d\n", min, max, i);
 		if (tag < dict[i].val)
 			max = i;
 		else if (tag > dict[i].val)
@@ -39,20 +32,18 @@ dict_lookup (const uint16_t group, const uint16_t element)
 }
 
 
-inline uint16_t
+uint16_t
 pop_u16 (char **x)   // TODO: see if macro faster
 {
 	uint16_t n = *(uint16_t*)*x;
-	//dprint("D: pop_u16 %x\n", n);
 	*x += 2;
 	return n;
 }
 
-inline uint32_t
+uint32_t
 pop_u32 (char **x)
 {
 	uint32_t n = *(uint32_t*)*x;
-	//dprint("D: pop_u32 %x\n", n);
 	*x += 4;
 	return n;
 }
@@ -79,85 +70,34 @@ print_vr_magics ()
 	}
 }
 
-int
+bool
 is_big_vr (char *VR)
 {
 	// VR is too big to print
 	int16_t n = *((int16_t*)VR);  // cast char[2] to int16
-	switch (n) {
-		case VR_OB:
-		case VR_OW:
-		case VR_OF:
-		case VR_UN:
-		case VR_UT:
-		case VR_SQ:
-			return 1;
-		default:
-			return 0;
-	}
+	return (n == VR_SQ || VR[0] == 'O' || n == VR_UN || n == VR_UT);
 }
 
-int
-is_vector_vr (const char *VR)
-{
-	// VR can be more than one value
-	int16_t n = *((int16_t*)VR);  // cast char[2] to int16
-	switch (n) {
-		case VR_OD:
-		case VR_OF:
-		case VR_OW:
-		case VR_OB:
-			return 1;
-		default:
-			return 0;
-	}
-}
+bool is_vector_vr (const char *VR) { return VR[0] == 'O'; }
+bool is_sequence (const char *VR) { return *((int16_t*)VR) == VR_SQ; }
+bool is_undefined (const int32_t length) { return length == 0xffffffff; }
 
 
-int is_sequence (const char *VR) { return *((int16_t*)VR) == VR_SQ; }
-
-
-int is_undefined (const int32_t length) { return length == 0xffffffff; }
-
-
-int 
+bool
 is_binary_vr (const char *VR)
 {
-	/* Is VR something other than a string of chars */
+	if (VR[0] == 'F' || VR[0] == 'O')
+	   return true;
 	int16_t n = *((int16_t*)VR);  // cast char[2] to int16
-	// TODO: BLoom filter or such for membership testing?
-	switch (n) {
-		case VR_SS:
-		case VR_SL:
-		case VR_US:
-		case VR_UL:
-		case VR_UN:
-		case VR_FL:
-		case VR_FD:
-		case VR_OB:
-		case VR_OW:
-		case VR_OF:
-		case VR_AT:
-			return 1;
-		default:
-			return 0;
-	}
+	return (n == VR_UL || n == VR_AT || n == VR_SS || n == VR_SL || n == VR_US || n == VR_UN);
 }
 
 
-int
+bool
 is_float_vr (const char *VR)
 {
 	int16_t n = *((int16_t*)VR);  // cast char[2] to int16
-	switch (n) {
-		case VR_FL:
-		case VR_FD:
-		case VR_OF:
-		case VR_OD:
-			return 1;
-		default:
-			return 0;
-	}
+	return (VR[0] == 'F' || n == VR_OF || n == VR_OD);
 }
 
 
@@ -166,19 +106,26 @@ void
 print_data_element (const char* const data, const uint16_t group, const uint16_t element, 
 		const char *VR, const uint32_t length, const int level)
 {
-	char *keyword = hide_keywords ? "" : dict_lookup(group, element);
+	char *keyword = dict_lookup(group, element);
 
 	if (hide_private && keyword == NULL) // skip private tags
 		return;
 
-	printf("%*s", 4*level, " ");
-	printf("(%04x,%04x) %c%c ", group, element, VR[0], VR[1]);
-	if (!hide_keywords)
-		printf("%-*s ", 40-4*level, keyword != NULL ? keyword : "Private");
-	printf("[");
+	printf("%*s(%04x,%04x) %c%c %-*s [", 4*level, " ", group, element, VR[0], VR[1],
+		40-4*level, keyword != NULL ? keyword : "Private");
 	int16_t nVR = *((int16_t*)VR);  // cast char[2] to int16 for matching
 	int veclen = length > 6 ? 6 : length;
 	switch (nVR) {
+		case VR_SQ:
+		case VR_DS:
+		case VR_SH:
+		case VR_CS:
+		case VR_LO:
+			printf("%.*s", length, data);
+			break;
+		case VR_FD:
+			printf("%f", *(double*)data);
+			break;
 		case VR_OF:
 			for (int i = 0; i < veclen; ++i)
 				printf("%f ", *(float*)data);
@@ -189,9 +136,6 @@ print_data_element (const char* const data, const uint16_t group, const uint16_t
 		case VR_OD:
 			for (int i = 0; i < veclen; ++i)
 				printf("%f ", *(double*)data);
-			break;
-		case VR_FD:
-			printf("%f", *(double*)data);
 			break;
 		case VR_SL:
 			printf("%d", *(int32_t*)data);
@@ -236,11 +180,11 @@ parse_sequence (char *data, const uint32_t size, const int level)
 	// Data Elements with a group of 0000, 0002 and 0006 shall not be present
 	// within Sequence Items.
 	const char *start = data;
-	while (1) {
+	while (true) {
 		uint32_t tag = pop_u32(&data);
 		if (is_undefined(size) && tag == SEQ_STOP) {
-			data += 4;
-			return data;
+			//data += 4;
+			return data + 4;
 		} else if (tag == ITEM_START) {
 			uint32_t length = pop_u32(&data);
 			data = parse_data_set(data, length, level + 1);
@@ -260,9 +204,8 @@ parse_data_set(char *data, const size_t size, const int level)
 	// TODO: handle implicit VR
 	uint32_t length;
 	char *start = data;
-	//dprint("D: DS parse of size %08zx at level %d\n", size, level);
 
-	while (1) {
+	while (true) {
 
 		uint32_t tag = pop_u32(&data);
 
@@ -287,10 +230,8 @@ parse_data_set(char *data, const size_t size, const int level)
 		}
 
 		if (is_sequence(VR)) { /* handle sequence encoding */
-			printf("%*s(%04x,%04x) SQ ", 4*level, " ", group, element);
-			if (!hide_keywords)
-				printf("%-*s", 40-4*level, dict_lookup(group, element));
-			printf("\n");
+			printf("%*s(%04x,%04x) SQ %-*s\n", 4*level, " ", group, element,
+				   	40-4*level, dict_lookup(group, element));
 			data = parse_sequence(data, length, level);
 		} else { /* regular tags ... just print */
 			print_data_element(data, group, element, VR, length, level);
@@ -347,20 +288,29 @@ main (int argc, char *argv[])
 	}
 	opterr = 0;
 	int c;
-	while ((c = getopt (argc, argv, "hkpv")) != -1) {
+	while ((c = getopt (argc, argv, "hpt:v")) != -1) {
 		switch (c) {
-			case 'k':
-				hide_keywords = true;
-				break;
 			case 'p':
 				hide_private = true;
+				break;
+			case 't':
+				nthreads = atoi(optarg);
 				break;
 			case 'h':
 			default:
 				print_usage();
 		}
 	}
-	int ret = parse_dicom_file(argv[optind]);
-	return ret;
+	char *path = argv[optind];
+	struct stat path_stat;
+	stat(path, &path_stat);
+	int ret;
+	if S_ISREG(path_stat.st_mode) {
+		int ret = parse_dicom_file(argv[optind]);
+		return ret;
+	} else {
+		fprintf(stderr, "Directory parsing not implemented yet.\n");
+		return EX_USAGE;
+	}
 }
 

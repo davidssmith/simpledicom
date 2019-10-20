@@ -3,9 +3,10 @@
 
 #include <assert.h>
 #include <fcntl.h>
-#include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sysexits.h>
@@ -45,45 +46,44 @@
 #define VR_US 0x5355
 #define VR_UT 0x5455
 
+#if 0
+#define VR_AE_BIT 1UL<<0
+#define VR_AS_BIT 1UL<<1
+#define VR_AT_BIT 1UL<<2
+#define VR_CS_BIT 1UL<<3
+#define VR_DA_BIT 1UL<<4
+#define VR_DS_BIT 1UL<<5
+#define VR_DT_BIT 1UL<<6
+#define VR_FD_BIT 1UL<<7
+#define VR_FL_BIT 1UL<<8
+#define VR_IS_BIT 1UL<<9
+#define VR_LO_BIT 1UL<<10
+#define VR_LT_BIT 1UL<<11
+#define VR_OB_BIT 1UL<<12
+#define VR_OD_BIT 1UL<<13
+#define VR_OF_BIT 1UL<<14
+#define VR_OW_BIT 1UL<<15
+#define VR_PN_BIT 1UL<<16
+#define VR_SH_BIT 1UL<<17
+#define VR_SL_BIT 1UL<<18
+#define VR_SQ_BIT 1UL<<19
+#define VR_SS_BIT 1UL<<20
+#define VR_ST_BIT 1UL<<21
+#define VR_TM_BIT 1UL<<22
+#define VR_UI_BIT 1UL<<23
+#define VR_UL_BIT 1UL<<24
+#define VR_UN_BIT 1UL<<25
+#define VR_US_BIT 1UL<<26
+#define VR_UT_BIT 1UL<<27
+#endif
+
+
 const uint32_t ITEM_START    = 0xe000fffeUL;
 const uint32_t ITEM_STOP  = 0xe00dfffeUL;
 const uint32_t SEQ_STOP   = 0xe0ddfffeUL;
 
-//#define _pop4(x)  *((uint32_t*)(x));(x)+=4;
-//#define _pop2(x)  *((uint16_t*)(x));(x)+=2;
-
-/*
-union VR {
-	uint16_t w;
-	char c[2];
-};
-
-
-union tag {
-	uint32_t t;
-	struct { 
-		uint16_t group;
-		uint16_t element;
-	} ge;
-};
-
-union quad {
-	uint32_t q;
-	uint16_t w[2];
-	char c[4];
-};
-
-uint16_t pop2 (char **x); 
-uint32_t pop4 (char **x);
-void _errchk (const int ret, const int errval);
-void print_vr_magics ();
-int is_big_vr (char *VR);
-int is_sequence (const char *VR);
-int is_binary_vr (const char *VR);
-int is_vector_vr (const char *VR);
-void print_de_value (const char* data, const char *VR, const uint32_t length);
-char * next_tag_explicit (char *data);
-*/
+#define _pop4(x)  *((uint32_t*)(x))
+#define _pop2(x)  *((uint16_t*)(x))
 
 char * parse_data_set(char *data, const size_t size, const int level);
 
