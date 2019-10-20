@@ -2,15 +2,11 @@
 #define _SIMPLE_DICOM_H
 
 #include <assert.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdint.h>
-#include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <sysexits.h>
 #include <unistd.h>
 
@@ -55,6 +51,7 @@ const uint32_t SEQ_STOP   = 0xe0ddfffeUL;
 //#define _pop4(x)  *((uint32_t*)(x));(x)+=4;
 //#define _pop2(x)  *((uint16_t*)(x));(x)+=2;
 
+/*
 union VR {
 	uint16_t w;
 	char c[2];
@@ -75,20 +72,18 @@ union quad {
 	char c[4];
 };
 
-
 uint16_t pop2 (char **x); 
 uint32_t pop4 (char **x);
 void _errchk (const int ret, const int errval);
 void print_vr_magics ();
 int is_big_vr (char *VR);
 int is_sequence (const char *VR);
-int is_binary_vr (char *VR);
-int is_vector_vr (char *VR);
-void print_de_value (char* data, char *VR, uint32_t length);
-size_t seek_undefined (char *data, uint16_t stop_code);
-//char * print_seq (char *data, uint32_t length);
+int is_binary_vr (const char *VR);
+int is_vector_vr (const char *VR);
+void print_de_value (const char* data, const char *VR, const uint32_t length);
 char * next_tag_explicit (char *data);
-char * parse_data_set(char *data, size_t size, int level);
+*/
 
+char * parse_data_set(char *data, const size_t size, const int level);
 
 #endif
