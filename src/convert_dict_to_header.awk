@@ -2,7 +2,7 @@
 BEGIN {
 	FS=","
 	print "#pragma once"
-	print "struct Tag { uint32_t val; char *VR; char *keyword; char VM[4];};"
+	print "struct Tag { uint32_t tag; char *VR; char *keyword; char VM[4];};"
 	print "static struct Tag dict[] = {"
 }
 

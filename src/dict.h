@@ -1,5 +1,5 @@
 #pragma once
-struct Tag { uint32_t val; char *VR; char *keyword; char VM[4];};
+struct Tag { uint32_t tag; char *VR; char *keyword; char VM[4];};
 static struct Tag dict[] = {
 {0x00000000,"UL","CommandGroupLength","1"},
 {0x00000001,"UL","CommandLengthToEnd","1"},

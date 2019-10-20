@@ -10,21 +10,36 @@
 
 static bool hide_private = false;
 static int nthreads = 1;
+static bool implicit_syntax = false;
+static bool in_metadata = true;
 
 
-char * dict_lookup (const uint32_t tag)
+int dict_lookup (const uint32_t tag)
 {
 	int min = 0, max = DICTSIZE;
 	do {
 		int i = (min + max) / 2;
-		if (tag < dict[i].val)
+		if (tag < dict[i].tag)
 			max = i;
-		else if (tag > dict[i].val)
+		else if (tag > dict[i].tag)
 			min = i;	
-		else 
-			return dict[i].keyword;
+		else
+			return i;
 	} while (max - min > 1);
-	return NULL;  // either private or unknown
+	return -1;  // either private or unknown
+}
+
+char * dict_keyword (const uint32_t tag)
+{
+	int i = dict_lookup(tag);
+	return i >= 0 ? dict[i].keyword : NULL;
+}
+
+char * dict_VR (const uint32_t tag)
+{
+	int i = dict_lookup(tag);
+	printf("tag=%x i=%d\n", tag, i);
+	return i >= 0 ? dict[i].VR : NULL;
 }
 
 
@@ -78,7 +93,7 @@ void
 print_data_element (const char* const data, const uint32_t tag,
 		const char *VR, const uint32_t length, const int level)
 {
-	char *keyword = dict_lookup(tag);
+	char *keyword = dict_keyword(tag);
 
 	if (hide_private && keyword == NULL) // skip private tags
 		return;
@@ -172,6 +187,7 @@ parse_data_set (char *data, const size_t size, const int level)
 	// TODO: handle implicit VR
 	uint32_t length;
 	char *start = data;
+	char *VR;
 
 	do {
 		uint32_t tag = pop_u32(&data);
@@ -179,16 +195,24 @@ parse_data_set (char *data, const size_t size, const int level)
 		if (size == SIZE_UNDEFINED && tag == ITEM_STOP)
 			return data + 4;
 
-		// swap about bytes for little endian
-		tag = (tag >> 16) | (tag & 0xffff) << 16;
-		char *VR = data;
-		data += 2;
+		tag = grp(tag) | ele(tag) << 16; // swap for little endian
 
-		if (is_big(VR)) {
-			data += 2;
+		if (implicit_syntax && !in_metadata) {
 			length = pop_u32(&data);
-		} else
-			length = pop_u16(&data);
+			VR = dict_VR(tag);
+			printf("dict_VR: %s\n", VR);
+		} else {
+			VR = data;
+			data += 2;
+			if (is_big(VR)) {
+				data += 2;
+				length = pop_u32(&data);
+			} else
+				length = pop_u16(&data);
+		}
+
+		if (in_metadata && grp(tag) > 0x2)
+			in_metadata = false;
 
 		print_data_element(data, tag, VR, length, level);
 
