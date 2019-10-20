@@ -1,4 +1,4 @@
-CC=clang-8 -mavx2 -march=native -g -O2
+CC=clang-8 -march=native -Wall -g -O2
 sd : sd.o
 	$(CC) -o sd sd.o
 

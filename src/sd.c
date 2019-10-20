@@ -6,7 +6,6 @@
  */
 
 #include "sd.h"
-#include "dict.h"
 
 static bool hide_private = false;
 static int nthreads = 1;
@@ -164,7 +163,8 @@ print_data_element (const char* const data, const uint32_t tag,
 }
 
 
-char * parse_sequence (char *data, const uint32_t size, const int level)
+char * 
+parse_sequence (char *data, const uint32_t size, const int level)
 {
 	// Data Elements with a group of 0000, 0002 and 0006 shall not be present
 	// within Sequence Items.
@@ -201,8 +201,14 @@ parse_data_set (char *data, const size_t size, const int level)
 
 		tag = grp(tag) | ele(tag) << 16; // swap for little endian
 
-		if (in_metadata && grp(tag) > 0x2)
-			in_metadata = false;
+		if (in_metadata) {
+			if (tag == 0x00020010) { // TransferSyntax
+
+
+			}
+			if (grp(tag) > 0x2)
+				in_metadata = false;
+		}
 
 		if (implicit_syntax && !in_metadata) {
 			length = pop_u32(&data);
@@ -216,6 +222,13 @@ parse_data_set (char *data, const size_t size, const int level)
 				length = pop_u32(&data);
 			} else
 				length = pop_u16(&data);
+		}
+
+		if (tag == 0x00020010) {
+			if (strncmp(data, "1.2.840.10008.1.2", length) == 0)
+				implicit_syntax = true;
+			else
+				implicit_syntax = false;
 		}
 
 		print_data_element(data, tag, VR, length, level);
@@ -244,7 +257,7 @@ parse_dicom_file (char *filename)
 	char *data = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE|MAP_POPULATE, fd, 0);
 	assert(data != MAP_FAILED);
 
-	int zero_header_length = 132;
+	//int zero_header_length = 132;
 	int level = 0;  // top level
 	char *ret = parse_data_set(data + 132, filesize - 132, level); // skip zero region
 
@@ -294,7 +307,6 @@ main (int argc, char *argv[])
 	char *path = argv[optind];
 	struct stat path_stat;
 	stat(path, &path_stat);
-	int ret;
 	if S_ISREG(path_stat.st_mode) {
 		int ret = parse_dicom_file(argv[optind]);
 		return ret;
