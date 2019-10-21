@@ -13,9 +13,39 @@ static bool implicit_syntax = false;
 static bool in_metadata = true;
 
 
+
+
+static int
+compdict(const void *l, const void *r)
+{
+	struct Tag *t1 = (struct Tag *) l;
+	struct Tag *t2 = (struct Tag *) r;
+	if (t1->tag > t2->tag)
+		return 1;
+	else if (t1->tag < t2->tag)
+		return -1;
+	else
+		return 0;
+}
+
+void
+sort_dict ()
+{
+	qsort((void*)dict, DICTSIZE, sizeof(struct Tag), compdict);
+}
+
+
+char *
+dict_lookup_keyword (const uint32_t tag) 
+{
+	struct Tag key = { .tag = tag }, *res;
+ 	res = bsearch(&key, (void*)dict, DICTSIZE, sizeof(struct Tag), compdict);
+	return res->keyword;
+}
+
 int dict_lookup (const uint32_t tag)
 {
-	int min = 0, max = DICTSIZE;
+	register int min = 0, max = DICTSIZE;
 	do {
 		int i = (min + max) / 2;
 		if (tag < dict[i].tag)
@@ -28,13 +58,15 @@ int dict_lookup (const uint32_t tag)
 	return -1;  // either private or unknown
 }
 
-char * dict_keyword (const uint32_t tag)
+char * 
+dict_keyword (const uint32_t tag)
 {
 	int i = dict_lookup(tag);
 	return i >= 0 ? dict[i].keyword : NULL;
 }
 
-char * dict_VR (const uint32_t tag)
+char * 
+dict_VR (const uint32_t tag)
 {
 	int i = dict_lookup(tag);
 	//printf("tag=%x i=%d\n", tag, i);
@@ -42,14 +74,16 @@ char * dict_VR (const uint32_t tag)
 }
 
 
-uint16_t pop_u16 (char **x)   // TODO: see if macro faster
+uint16_t 
+pop_u16 (char **x)   // TODO: see if macro faster
 {
 	uint16_t n = *(uint16_t*)*x;
 	*x += 2;
 	return n;
 }
 
-uint32_t pop_u32 (char **x)
+uint32_t 
+pop_u32 (char **x)
 {
 	uint32_t n = *(uint32_t*)*x;
 	*x += 4;
@@ -57,13 +91,15 @@ uint32_t pop_u32 (char **x)
 }
 
 
-void _errchk (const int ret, const int errval) {
+void 
+_errchk (const int ret, const int errval) {
 	if (ret == errval)
 		perror("sd: ");
 }
 
 
-void print_vr_magics ()
+void 
+print_vr_magics ()
 {
 	char all_vrs[] = "AEASSHLODADTTMCSSTLTUTPNISDSUISQSSUSSLULATFLFDOBOWOFUN";
 
@@ -75,7 +111,8 @@ void print_vr_magics ()
 	}
 }
 
-bool is_big (char *VR)
+bool 
+is_big (char *VR)
 {
 	// VR is too big to print
 	int16_t n = *((int16_t*)VR);  // cast char[2] to int16
@@ -111,34 +148,27 @@ print_data_element (const char* const data, const uint32_t tag,
 		case VR_SQ: 
 			break;
 		case VR_UI:
-			printf("%.*s", length, data);
-			break;
+			printf("%.*s", length, data); break;
 		case VR_FD:
-			printf("%g", *(double*)data);
-			break;
+			printf("%g", *(double*)data); break;
 		case VR_OF:
 			for (int i = 0; i < m; ++i)
 				printf("%g%*s", *((float*)data+i), i<m-1, "\\");
 			break;
 		case VR_FL:
-			printf("%f", *(float*)data);
-			break;
+			printf("%f", *(float*)data); break;
 		case VR_OD:
 			for (int i = 0; i < m; ++i)
 				printf("%g%*s", *((double*)data+i), i<m-1, "\\");
 			break;
 		case VR_SL:
-			printf("%d", *(int32_t*)data);
-			break;
+			printf("%d", *(int32_t*)data); break;
 		case VR_SS:
-			printf("%d", *(int16_t*)data);
-			break;
+			printf("%d", *(int16_t*)data); break;
 		case VR_US:
-			printf("%d", *(uint16_t*)data);
-			break;
+			printf("%d", *(uint16_t*)data); break;
 		case VR_UL:
-			printf("%d", *(uint32_t*)data);
-			break;
+			printf("%d", *(uint32_t*)data); break;
 		case VR_OB:
 			for (int i = 0; i < m; ++i)
 				printf("%02x%*s", *((uint8_t*)data+i), i<m-1, "\\");
@@ -148,8 +178,7 @@ print_data_element (const char* const data, const uint32_t tag,
 				printf("%04x%*s", *((uint16_t*)data+i), i<m-1, "\\");
 			break;
 		case VR_AT:
-			printf("%08x", *(uint32_t*)data);
-			break;
+			printf("%08x", *(uint32_t*)data); break;
 		case VR_UN:
 			for (int i = 0; i < m; ++i)
 				printf("%02x%*s", *(data+i), i<m-1, "\\");
@@ -164,40 +193,40 @@ print_data_element (const char* const data, const uint32_t tag,
 
 
 char * 
-parse_sequence (char *data, const uint32_t size, const int level)
+parse_sequence (char *cursor, const uint32_t size, const int level)
 {
 	// Data Elements with a group of 0000, 0002 and 0006 shall not be present
 	// within Sequence Items.
-	const char *start = data;
+	const char *start = cursor;
 	do {
-		uint32_t tag = pop_u32(&data);
+		uint32_t tag = pop_u32(&cursor);
 		if (size == SIZE_UNDEFINED && tag == SEQ_STOP)
-			return data + 4;
+			return cursor + 4;
 		if (tag == ITEM_START) {
-			uint32_t length = pop_u32(&data);
-			data = parse_data_set(data, length, level + 1);
+			uint32_t length = pop_u32(&cursor);
+			cursor = parse_data_set(cursor, length, level + 1);
 		} else {
 			fprintf(stderr, "nonsensical tag in Sequence: 0x%08x\n", tag);
 			return NULL;
 		}
-	} while (data < start + size); /* defined length case */
-	return data;
+	} while (cursor < start + size); /* defined length case */
+	return cursor;
 }
 
 
 char *
-parse_data_set (char *data, const size_t size, const int level)
+parse_data_set (char *cursor, const size_t size, const int level)
 {
 	// TODO: handle implicit VR
 	uint32_t length;
-	char *start = data;
+	char *start = cursor;
 	char *VR;
 
 	do {
-		uint32_t tag = pop_u32(&data);
+		uint32_t tag = pop_u32(&cursor);
 
 		if (size == SIZE_UNDEFINED && tag == ITEM_STOP)
-			return data + 4;
+			return cursor + 4;
 
 		tag = grp(tag) | ele(tag) << 16; // swap for little endian
 
@@ -206,36 +235,36 @@ parse_data_set (char *data, const size_t size, const int level)
 		}
 
 		if (implicit_syntax && !in_metadata) {
-			length = pop_u32(&data);
+			length = pop_u32(&cursor);
 			VR = dict_VR(tag);
 			//printf("%08x dict_VR: %s len:%x\n", tag, VR, length);
 		} else {
-			VR = data;
-			data += 2;
+			VR = cursor;
+			cursor += 2;
 			if (is_big(VR)) {
-				data += 2;
-				length = pop_u32(&data);
+				cursor += 2;
+				length = pop_u32(&cursor);
 			} else
-				length = pop_u16(&data);
+				length = pop_u16(&cursor);
 		}
 
 		if (tag == 0x00020010) {
-			if (strncmp(data, "1.2.840.10008.1.2", length) == 0)
+			if (strncmp(cursor, "1.2.840.10008.1.2", length) == 0)
 				implicit_syntax = true;
 			else
 				implicit_syntax = false;
 		}
 
-		print_data_element(data, tag, VR, length, level);
+		print_data_element(cursor, tag, VR, length, level);
 
 		if (is_sequence(VR) && !is_private(tag))
-			data = parse_sequence(data, length, level);
+			cursor = parse_sequence(cursor, length, level);
 		else
-			data += length;
+			cursor += length;
 
-	} while (data < start + size);
+	} while (cursor < start + size);
 
-	return data;
+	return cursor;
 }
 
 
@@ -269,6 +298,7 @@ void
 print_usage()
 {
 	fprintf(stderr, "Stream DICOM parser and manipulator\n");
+	fprintf(stderr, "sd [-hkp] <dicomfile>\n");
 	fprintf(stderr, "\t-h\tthis help\n");
 	fprintf(stderr, "\t-k\tprint keywords\n");
 	fprintf(stderr, "\t-p\tprint private tags\n");
@@ -278,7 +308,7 @@ int
 main (int argc, char *argv[])
 {
 	if (argc < 2) {
-		fprintf(stderr, "Usage: sd <dicomfile>\n");
+		print_usage();
 		return EX_USAGE;
 	}
 	opterr = 0;
@@ -302,6 +332,9 @@ main (int argc, char *argv[])
 	char *path = argv[optind];
 	struct stat path_stat;
 	stat(path, &path_stat);
+
+	//sort_dict(); // if dict not already sorted
+
 	if S_ISREG(path_stat.st_mode) {
 		int ret = parse_dicom_file(argv[optind]);
 		return ret;

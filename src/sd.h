@@ -79,6 +79,10 @@
 #define VR_UT_BIT 1UL<<27
 #endif
 
+
+typedef uint16_t u16;
+typedef uint32_t u32;
+
 union tag {
 	uint32_t tag;
 	struct { uint16_t g, e; };
