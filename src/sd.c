@@ -201,13 +201,8 @@ parse_data_set (char *data, const size_t size, const int level)
 
 		tag = grp(tag) | ele(tag) << 16; // swap for little endian
 
-		if (in_metadata) {
-			if (tag == 0x00020010) { // TransferSyntax
-
-
-			}
-			if (grp(tag) > 0x2)
-				in_metadata = false;
+		if (in_metadata && grp(tag) > 0x2) {
+			in_metadata = false;
 		}
 
 		if (implicit_syntax && !in_metadata) {
