@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -80,13 +81,15 @@
 #endif
 
 
-typedef uint16_t u16;
-typedef uint32_t u32;
+//typedef uint16_t u16;
+//typedef uint32_t u32;
 
+/*
 union tag {
 	uint32_t tag;
 	struct { uint16_t g, e; };
 };
+*/
 
 
 const uint32_t ITEM_START    = 0xe000fffe;

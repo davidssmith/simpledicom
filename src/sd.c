@@ -14,9 +14,10 @@ static bool in_metadata = true;
 
 
 
+/*
 
 static int
-compdict(const void *l, const void *r)
+compdict(void * const l, void * const r)
 {
 	struct Tag *t1 = (struct Tag *) l;
 	struct Tag *t2 = (struct Tag *) r;
@@ -42,6 +43,7 @@ dict_lookup_keyword (const uint32_t tag)
  	res = bsearch(&key, (void*)dict, DICTSIZE, sizeof(struct Tag), compdict);
 	return res->keyword;
 }
+*/
 
 int dict_lookup (const uint32_t tag)
 {
@@ -103,7 +105,7 @@ print_vr_magics ()
 {
 	char all_vrs[] = "AEASSHLODADTTMCSSTLTUTPNISDSUISQSSUSSLULATFLFDOBOWOFUN";
 
-	for (int i = 0; i < sizeof all_vrs - 1; i += 2) {
+	for (size_t i = 0; i < sizeof all_vrs - 1; i += 2) {
 		int16_t n = *((int16_t*)(all_vrs + i));
 		char a = all_vrs[i];
 		char b = all_vrs[i+1];
@@ -119,8 +121,8 @@ is_big (char *VR)
 	return (n == VR_SQ || VR[0] == 'O' || n == VR_UN || n == VR_UT);
 }
 
-bool is_vector (const char *VR) { return VR[0] == 'O'; }
-bool is_sequence (const char *VR) { return *((int16_t*)VR) == VR_SQ; }
+bool is_vector (const char *const VR) { return VR[0] == 'O'; }
+bool is_sequence (char * const VR) { return *((int16_t*)VR) == VR_SQ; }
 
 
 uint16_t grp (const uint32_t tag) { return tag >> 16; }
@@ -128,8 +130,8 @@ uint16_t ele (const uint32_t tag) { return tag & 0xffff; }
 bool is_private (const uint32_t tag) { return grp(tag) % 2 == 1; }
 
 void
-print_data_element (const char* const data, const uint32_t tag,
-		const char *VR, const uint32_t length, const int level)
+print_data_element (char* const data, const uint32_t tag,
+		char *const VR, const uint32_t length, const int level)
 {
 	char *keyword = dict_keyword(tag);
 
@@ -143,7 +145,7 @@ print_data_element (const char* const data, const uint32_t tag,
 	printf("(%04x,%04x) %c%c %-*s %6d [", grp(tag), ele(tag), VR[0], VR[1],
 		36-4*level, keyword != NULL ? keyword : "Private", length);
 	int16_t nVR = *((int16_t*)VR);  // cast char[2] to int16 for matching
-	int m = length > 6 ? 6 : length;
+	uint32_t m = length > 6 ? 6 : length;
 	switch (nVR) {
 		case VR_SQ: 
 			break;
@@ -152,13 +154,13 @@ print_data_element (const char* const data, const uint32_t tag,
 		case VR_FD:
 			printf("%g", *(double*)data); break;
 		case VR_OF:
-			for (int i = 0; i < m; ++i)
+			for (uint32_t i = 0; i < m; ++i)
 				printf("%g%*s", *((float*)data+i), i<m-1, "\\");
 			break;
 		case VR_FL:
 			printf("%f", *(float*)data); break;
 		case VR_OD:
-			for (int i = 0; i < m; ++i)
+			for (uint32_t i = 0; i < m; ++i)
 				printf("%g%*s", *((double*)data+i), i<m-1, "\\");
 			break;
 		case VR_SL:
@@ -170,17 +172,17 @@ print_data_element (const char* const data, const uint32_t tag,
 		case VR_UL:
 			printf("%d", *(uint32_t*)data); break;
 		case VR_OB:
-			for (int i = 0; i < m; ++i)
+			for (uint32_t i = 0; i < m; ++i)
 				printf("%02x%*s", *((uint8_t*)data+i), i<m-1, "\\");
 			break;
 		case VR_OW:
-			for (int i = 0; i < m; ++i)
+			for (uint32_t i = 0; i < m; ++i)
 				printf("%04x%*s", *((uint16_t*)data+i), i<m-1, "\\");
 			break;
 		case VR_AT:
 			printf("%08x", *(uint32_t*)data); break;
 		case VR_UN:
-			for (int i = 0; i < m; ++i)
+			for (uint32_t i = 0; i < m; ++i)
 				printf("%02x%*s", *(data+i), i<m-1, "\\");
 			break;
 		default:
@@ -278,7 +280,7 @@ parse_dicom_file (char *filename)
 	_errchk(fstat(fd, &st), -1);
 	size_t filesize = st.st_size;
 
-	char *data = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE|MAP_POPULATE, fd, 0);
+	char *data = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE, fd, 0);
 	assert(data != MAP_FAILED);
 
 	//int zero_header_length = 132;
@@ -311,6 +313,8 @@ main (int argc, char *argv[])
 		print_usage();
 		return EX_USAGE;
 	}
+	extern char *optarg;
+    extern int optind, opterr, optopt;
 	opterr = 0;
 	int c;
 	while ((c = getopt (argc, argv, "hipt:")) != -1) {
