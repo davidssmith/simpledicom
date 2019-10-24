@@ -1,7 +1,0 @@
-profile execution to find bottlenecks
-
-try to print private tags, by making NULL dict search default to like VR=OB
-
-translate syntaxes, SOP, etc. UIDs
-
-implement implicit VR

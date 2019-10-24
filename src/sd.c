@@ -1,6 +1,4 @@
 /*
- * TODO: add implicit 
- * TODO: track nested level for indentation or indication
  * TODO: see if using int VR instead of char[2] is faster
  *
  */
@@ -9,8 +7,8 @@
 
 static bool hide_private = false;
 static int nthreads = 1;
-static bool implicit_syntax = false;
-static bool in_metadata = true;
+static bool explicit_syntax = true;
+//static bool in_metadata = true;
 
 
 
@@ -45,10 +43,11 @@ dict_lookup_keyword (const uint32_t tag)
 }
 */
 
-int dict_lookup (const uint32_t tag)
+int 
+dict_lookup (const uint32_t tag)
 {
-	register int min = 0, max = DICTSIZE;
-	do {
+	for (int min = 0, max = DICTSIZE; max - min > 1; )
+	{
 		int i = (min + max) / 2;
 		if (tag < dict[i].tag)
 			max = i;
@@ -56,22 +55,21 @@ int dict_lookup (const uint32_t tag)
 			min = i;	
 		else
 			return i;
-	} while (max - min > 1);
+	}
 	return -1;  // either private or unknown
 }
 
 char * 
 dict_keyword (const uint32_t tag)
 {
-	int i = dict_lookup(tag);
+	const int i = dict_lookup(tag);
 	return i >= 0 ? dict[i].keyword : NULL;
 }
 
 char * 
 dict_VR (const uint32_t tag)
 {
-	int i = dict_lookup(tag);
-	//printf("tag=%x i=%d\n", tag, i);
+	const int i = dict_lookup(tag);
 	return i >= 0 ? dict[i].VR : "OB";
 }
 
@@ -117,12 +115,12 @@ bool
 is_big (char *VR)
 {
 	// VR is too big to print
-	int16_t n = *((int16_t*)VR);  // cast char[2] to int16
+	uint16_t n = *((uint16_t*)VR);  // cast char[2] to int16
 	return (n == VR_SQ || VR[0] == 'O' || n == VR_UN || n == VR_UT);
 }
 
 bool is_vector (const char *const VR) { return VR[0] == 'O'; }
-bool is_sequence (char * const VR) { return *((int16_t*)VR) == VR_SQ; }
+bool is_sequence (char * const VR) { return *((uint16_t*)VR) == VR_SQ; }
 
 
 uint16_t grp (const uint32_t tag) { return tag >> 16; }
@@ -144,52 +142,44 @@ print_data_element (char* const data, const uint32_t tag,
 		printf("%*s", 4*level, " ");
 	printf("(%04x,%04x) %c%c %-*s %6d [", grp(tag), ele(tag), VR[0], VR[1],
 		36-4*level, keyword != NULL ? keyword : "Private", length);
-	int16_t nVR = *((int16_t*)VR);  // cast char[2] to int16 for matching
-	uint32_t m = length > 6 ? 6 : length;
-	switch (nVR) {
-		case VR_SQ: 
-			break;
-		case VR_UI:
-			printf("%.*s", length, data); break;
-		case VR_FD:
-			printf("%g", *(double*)data); break;
-		case VR_OF:
-			for (uint32_t i = 0; i < m; ++i)
-				printf("%g%*s", *((float*)data+i), i<m-1, "\\");
-			break;
-		case VR_FL:
-			printf("%f", *(float*)data); break;
-		case VR_OD:
-			for (uint32_t i = 0; i < m; ++i)
-				printf("%g%*s", *((double*)data+i), i<m-1, "\\");
-			break;
-		case VR_SL:
-			printf("%d", *(int32_t*)data); break;
-		case VR_SS:
-			printf("%d", *(int16_t*)data); break;
-		case VR_US:
-			printf("%d", *(uint16_t*)data); break;
-		case VR_UL:
-			printf("%d", *(uint32_t*)data); break;
-		case VR_OB:
-			for (uint32_t i = 0; i < m; ++i)
-				printf("%02x%*s", *((uint8_t*)data+i), i<m-1, "\\");
-			break;
-		case VR_OW:
-			for (uint32_t i = 0; i < m; ++i)
-				printf("%04x%*s", *((uint16_t*)data+i), i<m-1, "\\");
-			break;
-		case VR_AT:
-			printf("%08x", *(uint32_t*)data); break;
-		case VR_UN:
-			for (uint32_t i = 0; i < m; ++i)
-				printf("%02x%*s", *(data+i), i<m-1, "\\");
-			break;
-		default:
-			printf("%.*s", length, data);
-	}
+	int16_t v = *((int16_t*)VR);  // cast char[2] to int16 for matching
+	int m = length > 6 ? 6 : length;
+	if (v == VR_SQ)
+		goto done;
+	else if (v == VR_FD) // moved up due to frequency
+		printf("%g", *(double*)data);
+	else if (v == VR_US)
+		printf("%d", *(uint16_t*)data);
+	else if (v == VR_UL)
+		printf("%d", *(uint32_t*)data);
+	else if (v == VR_OF)
+		for (int i = 0; i < m; ++i)
+			printf("%g%*s", *((float*)data+i), i<m-1, "\\");
+	else if (v == VR_FL)
+		printf("%f", *(float*)data); 
+	else if (v == VR_OD)
+		for (int i = 0; i < m; ++i)
+			printf("%g%*s", *((double*)data+i), i<m-1, "\\");
+	else if (v == VR_SL)
+		printf("%d", *(int32_t*)data);
+	else if (v == VR_SS)
+		printf("%d", *(int16_t*)data);
+	else if (v == VR_OB)
+		for (int i = 0; i < m; ++i)
+			printf("%02x%*s", *((uint8_t*)data+i), i<m-1, "\\");
+	else if (v == VR_OW)
+		for (int i = 0; i < m; ++i)
+			printf("%04x%*s", *((uint16_t*)data+i), i<m-1, "\\");
+	else if (v == VR_AT)
+		printf("%08x", *(uint32_t*)data); 
+	else if (v == VR_UN)
+		for (int i = 0; i < m; ++i)
+			printf("%02x%*s", *(data+i), i<m-1, "\\");
+	else
+		printf("%.*s", length, data);
 	if (is_vector(VR) && length > m)
 		printf("...");
+done:
 	printf("]\n");
 }
 
@@ -199,7 +189,7 @@ parse_sequence (char *cursor, const uint32_t size, const int level)
 {
 	// Data Elements with a group of 0000, 0002 and 0006 shall not be present
 	// within Sequence Items.
-	const char *start = cursor;
+	const char * const start = cursor;
 	do {
 		uint32_t tag = pop_u32(&cursor);
 		if (size == SIZE_UNDEFINED && tag == SEQ_STOP)
@@ -219,12 +209,8 @@ parse_sequence (char *cursor, const uint32_t size, const int level)
 char *
 parse_data_set (char *cursor, const size_t size, const int level)
 {
-	// TODO: handle implicit VR
-	uint32_t length;
-	char *start = cursor;
-	char *VR;
-
-	do {
+	for (const char *const start = cursor; cursor < start + size; )
+	{
 		uint32_t tag = pop_u32(&cursor);
 
 		if (size == SIZE_UNDEFINED && tag == ITEM_STOP)
@@ -232,15 +218,13 @@ parse_data_set (char *cursor, const size_t size, const int level)
 
 		tag = grp(tag) | ele(tag) << 16; // swap for little endian
 
-		if (in_metadata && grp(tag) > 0x2) {
-			in_metadata = false;
-		}
+		//if (in_metadata && grp(tag) > 0x2) {
+		//	in_metadata = false;
+		//}
 
-		if (implicit_syntax && !in_metadata) {
-			length = pop_u32(&cursor);
-			VR = dict_VR(tag);
-			//printf("%08x dict_VR: %s len:%x\n", tag, VR, length);
-		} else {
+		uint32_t length;
+		char *VR;
+		if (explicit_syntax || grp(tag) > METADATA_GROUP) {
 			VR = cursor;
 			cursor += 2;
 			if (is_big(VR)) {
@@ -248,13 +232,16 @@ parse_data_set (char *cursor, const size_t size, const int level)
 				length = pop_u32(&cursor);
 			} else
 				length = pop_u16(&cursor);
+		} else {
+			length = pop_u32(&cursor);
+			VR = dict_VR(tag);
 		}
 
 		if (tag == 0x00020010) {
 			if (strncmp(cursor, "1.2.840.10008.1.2", length) == 0)
-				implicit_syntax = true;
+				explicit_syntax = false;
 			else
-				implicit_syntax = false;
+				explicit_syntax = true;
 		}
 
 		print_data_element(cursor, tag, VR, length, level);
@@ -264,7 +251,7 @@ parse_data_set (char *cursor, const size_t size, const int level)
 		else
 			cursor += length;
 
-	} while (cursor < start + size);
+	}
 
 	return cursor;
 }
@@ -326,7 +313,7 @@ main (int argc, char *argv[])
 				nthreads = atoi(optarg);
 				break;
 			case 'i':
-				implicit_syntax = true;
+				explicit_syntax = false;
 				break;
 			case 'h':
 			default:

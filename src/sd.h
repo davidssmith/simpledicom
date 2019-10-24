@@ -96,6 +96,7 @@ const uint32_t ITEM_START    = 0xe000fffe;
 const uint32_t ITEM_STOP  = 0xe00dfffe;
 const uint32_t SEQ_STOP   = 0xe0ddfffe;
 const uint32_t SIZE_UNDEFINED = 0xffffffff;
+const uint32_t METADATA_GROUP = 0x0002;
 
 #define _pop4(x)  *((uint32_t*)(x))
 #define _pop2(x)  *((uint16_t*)(x))
