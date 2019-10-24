@@ -7,7 +7,8 @@
 
 static bool hide_private = false;
 static int nthreads = 1;
-static bool explicit_syntax = true;
+static bool implicit_syntax = true; // ImplicitVRLittleEndian is default
+static bool bigendian = false;
 //static bool in_metadata = true;
 
 
@@ -218,13 +219,9 @@ parse_data_set (char *cursor, const size_t size, const int level)
 
 		tag = grp(tag) | ele(tag) << 16; // swap for little endian
 
-		//if (in_metadata && grp(tag) > 0x2) {
-		//	in_metadata = false;
-		//}
-
 		uint32_t length;
 		char *VR;
-		if (explicit_syntax || grp(tag) > METADATA_GROUP) {
+		if (grp(tag) <= METADATA_GROUP || !implicit_syntax) {
 			VR = cursor;
 			cursor += 2;
 			if (is_big(VR)) {
@@ -232,16 +229,11 @@ parse_data_set (char *cursor, const size_t size, const int level)
 				length = pop_u32(&cursor);
 			} else
 				length = pop_u16(&cursor);
+			if (tag == 0x00020010 && strncmp(cursor, "1.2.840.10008.1.2", length) != 0)
+					implicit_syntax = false;
 		} else {
 			length = pop_u32(&cursor);
 			VR = dict_VR(tag);
-		}
-
-		if (tag == 0x00020010) {
-			if (strncmp(cursor, "1.2.840.10008.1.2", length) == 0)
-				explicit_syntax = false;
-			else
-				explicit_syntax = true;
 		}
 
 		print_data_element(cursor, tag, VR, length, level);
@@ -304,16 +296,13 @@ main (int argc, char *argv[])
     extern int optind, opterr, optopt;
 	opterr = 0;
 	int c;
-	while ((c = getopt (argc, argv, "hipt:")) != -1) {
+	while ((c = getopt (argc, argv, "hpt:")) != -1) {
 		switch (c) {
 			case 'p':
 				hide_private = true;
 				break;
 			case 't':
 				nthreads = atoi(optarg);
-				break;
-			case 'i':
-				explicit_syntax = false;
 				break;
 			case 'h':
 			default:
