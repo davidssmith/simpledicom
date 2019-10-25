@@ -1,5 +1,7 @@
 /*
- * TODO: see if using int VR instead of char[2] is faster
+ * TODO: 
+ * see if using int VR instead of char[2] is faster
+ * carry around maximum size to read, based on ~ MIN(length,file_size_remaining) 
  *
  */
 
@@ -286,7 +288,7 @@ print_usage()
 }
 
 int 
-main (int argc, char *argv[])
+main (const int argc, const char *const argv[])
 {
 	if (argc < 2) {
 		print_usage();
