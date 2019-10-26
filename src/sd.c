@@ -5,12 +5,14 @@
  *
  */
 
+//#define _GNU_SOURCE
 #include "sd.h"
 
 static bool hide_private = false;
 static int nthreads = 1;
 static bool implicit_syntax = true; // ImplicitVRLittleEndian is default
-static bool bigendian = false;
+static int max_level = 100;
+//static bool bigendian = false;
 //static bool in_metadata = true;
 
 
@@ -46,6 +48,13 @@ dict_lookup_keyword (const uint32_t tag)
 }
 */
 
+uint16_t 
+vr_from_string (const char* s) // convert from 2-char str
+{
+	uint16_t n = s[1] ;
+	return (n << 8) | s[0];
+}
+
 int 
 dict_lookup (const uint32_t tag)
 {
@@ -69,11 +78,16 @@ dict_keyword (const uint32_t tag)
 	return i >= 0 ? dict[i].keyword : NULL;
 }
 
-char * 
+uint16_t
 dict_VR (const uint32_t tag)
 {
 	const int i = dict_lookup(tag);
-	return i >= 0 ? dict[i].VR : "OB";
+	if (i < 0)
+		return VR_OB;
+	else {
+		uint16_t VR = vr_from_string(dict[i].VR);
+		return VR;
+	}
 }
 
 
@@ -101,6 +115,7 @@ _errchk (const int ret, const int errval) {
 }
 
 
+#ifdef VR_MAGIC
 void 
 print_vr_magics ()
 {
@@ -113,27 +128,57 @@ print_vr_magics ()
 		printf("#define VR_%c%c 0x%x\n", a, b, n);
 	}
 }
+#endif
 
-bool 
-is_big (char *VR)
-{
-	// VR is too big to print
-	uint16_t n = *((uint16_t*)VR);  // cast char[2] to int16
-	return (n == VR_SQ || VR[0] == 'O' || n == VR_UN || n == VR_UT);
+char 
+char2 (uint16_t n) 
+{ 
+	return (char)(n >> 8); 
 }
 
-bool is_vector (const char *const VR) { return VR[0] == 'O'; }
-bool is_sequence (char * const VR) { return *((uint16_t*)VR) == VR_SQ; }
+char 
+char1 (uint16_t n) 
+{ 
+	return (char)(n & 0xff); 
+}
+
+bool 
+is_big (const uint16_t VR)
+{
+	// VR is too big to print
+	return VR == VR_SQ || char1(VR) == 'O' || VR == VR_UN || VR == VR_UT;
+}
+
+bool 
+is_vector (const uint16_t VR) 
+{ 
+	return char1(VR) == 'O';
+}
+
+bool 
+is_sequence (const uint16_t VR) { 
+	return VR == VR_SQ;
+}
 
 
-uint16_t grp (const uint32_t tag) { return tag >> 16; }
-uint16_t ele (const uint32_t tag) { return tag & 0xffff; }
-bool is_private (const uint32_t tag) { return grp(tag) % 2 == 1; }
+uint16_t grp (const uint32_t tag) { 
+	return tag >> 16; 
+}
+
+uint16_t ele (const uint32_t tag) { 
+	return tag & 0xffff; 
+}
+
+bool is_private (const uint32_t tag) { 
+	return grp(tag) % 2 == 1; 
+}
 
 void
 print_data_element (char* const data, const uint32_t tag,
-		char *const VR, const uint32_t length, const int level)
+		const uint16_t VR, const uint32_t length, const int level)
 {
+	if (level >= max_level)
+		return;
 	char *keyword = dict_keyword(tag);
 
 	if (hide_private && (keyword == NULL || is_private(tag))) {// skip private tags
@@ -143,40 +188,39 @@ print_data_element (char* const data, const uint32_t tag,
 
 	if (level > 0)
 		printf("%*s", 4*level, " ");
-	printf("(%04x,%04x) %c%c %-*s %6d [", grp(tag), ele(tag), VR[0], VR[1],
+	printf("(%04x,%04x) %c%c %-*s %6d [", grp(tag), ele(tag), char1(VR), char2(VR),
 		36-4*level, keyword != NULL ? keyword : "Private", length);
-	int16_t v = *((int16_t*)VR);  // cast char[2] to int16 for matching
-	int m = length > 6 ? 6 : length;
-	if (v == VR_SQ)
+	uint32_t m = length > 6 ? 6 : length;
+	if (VR == VR_SQ)
 		goto done;
-	else if (v == VR_FD) // moved up due to frequency
+	else if (VR == VR_FD) // moved up due to frequency
 		printf("%g", *(double*)data);
-	else if (v == VR_US)
+	else if (VR == VR_US)
 		printf("%d", *(uint16_t*)data);
-	else if (v == VR_UL)
+	else if (VR == VR_UL)
 		printf("%d", *(uint32_t*)data);
-	else if (v == VR_OF)
-		for (int i = 0; i < m; ++i)
+	else if (VR == VR_OF)
+		for (uint32_t i = 0; i < m; ++i)
 			printf("%g%*s", *((float*)data+i), i<m-1, "\\");
-	else if (v == VR_FL)
+	else if (VR == VR_FL)
 		printf("%f", *(float*)data); 
-	else if (v == VR_OD)
-		for (int i = 0; i < m; ++i)
+	else if (VR == VR_OD)
+		for (uint32_t i = 0; i < m; ++i)
 			printf("%g%*s", *((double*)data+i), i<m-1, "\\");
-	else if (v == VR_SL)
+	else if (VR == VR_SL)
 		printf("%d", *(int32_t*)data);
-	else if (v == VR_SS)
+	else if (VR == VR_SS)
 		printf("%d", *(int16_t*)data);
-	else if (v == VR_OB)
-		for (int i = 0; i < m; ++i)
+	else if (VR == VR_OB)
+		for (uint32_t i = 0; i < m; ++i)
 			printf("%02x%*s", *((uint8_t*)data+i), i<m-1, "\\");
-	else if (v == VR_OW)
-		for (int i = 0; i < m; ++i)
+	else if (VR == VR_OW)
+		for (uint32_t i = 0; i < m; ++i)
 			printf("%04x%*s", *((uint16_t*)data+i), i<m-1, "\\");
-	else if (v == VR_AT)
+	else if (VR == VR_AT)
 		printf("%08x", *(uint32_t*)data); 
-	else if (v == VR_UN)
-		for (int i = 0; i < m; ++i)
+	else if (VR == VR_UN)
+		for (uint32_t i = 0; i < m; ++i)
 			printf("%02x%*s", *(data+i), i<m-1, "\\");
 	else
 		printf("%.*s", length, data);
@@ -222,10 +266,9 @@ parse_data_set (char *cursor, const size_t size, const int level)
 		tag = grp(tag) | ele(tag) << 16; // swap for little endian
 
 		uint32_t length;
-		char *VR;
+		uint16_t VR; // TODO: switch VR to u16 everywhere
 		if (grp(tag) <= METADATA_GROUP || !implicit_syntax) {
-			VR = cursor;
-			cursor += 2;
+			VR = pop_u16(&cursor);
 			if (is_big(VR)) {
 				cursor += 2;
 				length = pop_u32(&cursor);
@@ -283,12 +326,13 @@ print_usage()
 	fprintf(stderr, "Stream DICOM parser and manipulator\n");
 	fprintf(stderr, "sd [-hkp] <dicomfile>\n");
 	fprintf(stderr, "\t-h\tthis help\n");
+	fprintf(stderr, "\t-l\tmax nesting level to print\n");
 	fprintf(stderr, "\t-k\tprint keywords\n");
 	fprintf(stderr, "\t-p\tprint private tags\n");
 }
 
 int 
-main (const int argc, const char *const argv[])
+main (int argc, char *const argv[])
 {
 	if (argc < 2) {
 		print_usage();
@@ -298,8 +342,11 @@ main (const int argc, const char *const argv[])
     extern int optind, opterr, optopt;
 	opterr = 0;
 	int c;
-	while ((c = getopt (argc, argv, "hpt:")) != -1) {
+	while ((c = getopt (argc, argv, "hl:pt:")) != -1) {
 		switch (c) {
+			case 'l':
+				max_level = atoi(optarg);
+				break;
 			case 'p':
 				hide_private = true;
 				break;
