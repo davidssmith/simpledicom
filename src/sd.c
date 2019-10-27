@@ -1,19 +1,21 @@
 /*
  * TODO: 
- * see if using int VR instead of char[2] is faster
  * carry around maximum size to read, based on ~ MIN(length,file_size_remaining) 
  *
  */
 
-//#define _GNU_SOURCE
+#define _GNU_SOURCE
 #include "sd.h"
 
 static bool hide_private = false;
 static int nthreads = 1;
 static bool implicit_syntax = true; // ImplicitVRLittleEndian is default
 static int max_level = 100;
+static char *keyword_to_print = NULL;
+static bool done = false;
 //static bool bigendian = false;
 //static bool in_metadata = true;
+//
 
 
 
@@ -177,19 +179,23 @@ void
 print_data_element (char* const data, const uint32_t tag,
 		const uint16_t VR, const uint32_t length, const int level)
 {
-	if (level >= max_level)
-		return;
 	char *keyword = dict_keyword(tag);
-
-	if (hide_private && (keyword == NULL || is_private(tag))) {// skip private tags
-		printf("SKIP\n");
+	if (level >= max_level || 
+		(hide_private && (keyword == NULL || is_private(tag))))
 		return;
-	}
 
-	if (level > 0)
-		printf("%*s", 4*level, " ");
-	printf("(%04x,%04x) %c%c %-*s %6d [", grp(tag), ele(tag), char1(VR), char2(VR),
-		36-4*level, keyword != NULL ? keyword : "Private", length);
+	if (keyword_to_print != NULL) {
+	   if (!strcmp(keyword_to_print, keyword)) {
+			done = true;
+	   } else {
+		   return;
+	   }
+	} else {
+		if (level > 0)
+			printf("%*s", 4*level, " ");
+		printf("(%04x,%04x) %c%c %-*s %6d [", grp(tag), ele(tag), char1(VR), char2(VR),
+			36-4*level, keyword != NULL ? keyword : "Private", length);
+	}
 	uint32_t m = length > 6 ? 6 : length;
 	if (VR == VR_SQ)
 		goto done;
@@ -227,7 +233,7 @@ print_data_element (char* const data, const uint32_t tag,
 	if (is_vector(VR) && length > m)
 		printf("...");
 done:
-	printf("]\n");
+	keyword_to_print == NULL ?  printf("]\n") : printf("\n");
 }
 
 
@@ -248,6 +254,8 @@ parse_sequence (char *cursor, const uint32_t size, const int level)
 			fprintf(stderr, "nonsensical tag in Sequence: 0x%08x\n", tag);
 			return NULL;
 		}
+		if (done)
+			break;
 	} while (cursor < start + size); /* defined length case */
 	return cursor;
 }
@@ -288,6 +296,8 @@ parse_data_set (char *cursor, const size_t size, const int level)
 		else
 			cursor += length;
 
+		if (done)
+			break;
 	}
 
 	return cursor;
@@ -306,6 +316,7 @@ parse_dicom_file (char *filename)
 
 	char *data = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE, fd, 0);
 	assert(data != MAP_FAILED);
+	madvise(data, filesize, MADV_SEQUENTIAL | MADV_WILLNEED); 
 
 	//int zero_header_length = 132;
 	int level = 0;  // top level
@@ -342,8 +353,11 @@ main (int argc, char *const argv[])
     extern int optind, opterr, optopt;
 	opterr = 0;
 	int c;
-	while ((c = getopt (argc, argv, "hl:pt:")) != -1) {
+	while ((c = getopt (argc, argv, "hk:l:pt:")) != -1) {
 		switch (c) {
+			case 'k':
+				keyword_to_print = optarg;
+				break;
 			case 'l':
 				max_level = atoi(optarg);
 				break;

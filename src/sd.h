@@ -1,6 +1,4 @@
-#ifndef _SIMPLE_DICOM_H
-#define _SIMPLE_DICOM_H
-
+#pragma once
 #include <assert.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -102,5 +100,3 @@ const uint32_t METADATA_GROUP = 0x0002;
 #define _pop2(x)  *((uint16_t*)(x))
 
 char * parse_data_set(char *data, const size_t size, const int level);
-
-#endif

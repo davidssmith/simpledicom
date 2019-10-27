@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
@@ -8,6 +9,7 @@
 
 int ndirs = 0;
 int nfiles = 0;
+int nnoperm = 0;
 
 
 int 
@@ -43,7 +45,9 @@ dirwalk (char *path)
 		}
 		closedir(dir);
 	} else {
-		fprintf(stderr, "\nFailed to walk directory \"%s\"\n", path);
+		nnoperm += 1;
+		fprintf(stderr, "%s ", path);
+		perror("failed");
 		return EX_IOERR;
 	}
 	return EX_OK;
@@ -59,6 +63,6 @@ main (int argc, char *argv[])
 		return EX_USAGE;
 	}
 	int res = dirwalk(argv[1]);
-	printf("ndirs: %d\nnfiles: %d\n", ndirs, nfiles);
+	printf("ndirs: %d\nnfiles: %d\nnnoperm: %d\n", ndirs, nfiles, nnoperm);
 	return res;
 }
