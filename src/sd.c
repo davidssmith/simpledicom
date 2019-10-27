@@ -335,11 +335,11 @@ void
 print_usage()
 {
 	fprintf(stderr, "Stream DICOM parser and manipulator\n");
-	fprintf(stderr, "sd [-hkp] <dicomfile>\n");
-	fprintf(stderr, "\t-h\tthis help\n");
-	fprintf(stderr, "\t-l\tmax nesting level to print\n");
-	fprintf(stderr, "\t-k\tprint keywords\n");
-	fprintf(stderr, "\t-p\tprint private tags\n");
+	fprintf(stderr, "sd [-hp] [-k keyword] [-l n] <dicomfile>\n");
+	fprintf(stderr, "\t-h\t\tthis help\n");
+	fprintf(stderr, "\t-k keyword\tprint single keyword\n");
+	fprintf(stderr, "\t-l n\t\tmax nesting level to print\n");
+	fprintf(stderr, "\t-p\t\tomit private tags\n");
 }
 
 int 
