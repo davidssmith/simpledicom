@@ -4,7 +4,6 @@
  *
  */
 
-#define _GNU_SOURCE
 #include "sd.h"
 
 static bool hide_private = false;
@@ -16,7 +15,46 @@ static bool done = false;
 //static bool bigendian = false;
 //static bool in_metadata = true;
 //
+//
 
+int
+is_dir (const char *path)
+{
+	struct stat s;
+	stat(path, &s);
+	return S_ISDIR(s.st_mode);
+}
+
+int
+dirwalk (char *path, int (*func)(const char *path))
+{
+	char *entpath; // TODO: put on stack
+	struct dirent *ent;
+	DIR *dir = opendir(path);
+
+	if (dir != NULL) {
+		while((ent = readdir(dir)) != NULL) {
+			if (strncmp(ent->d_name, ".", 1) == 0 || strncmp(ent->d_name, "..", 2) == 0)
+				continue;
+			if (asprintf(&entpath, "%s/%s", path, ent->d_name) == -1) {
+				return EX_OSERR;
+			}
+			if (is_dir(entpath)) {
+				printf("DIR: %s\n", ent->d_name);
+				dirwalk(entpath, func);
+			} else {
+				printf("FILE: %s\n", ent->d_name);
+				(*func)(ent->d_name);
+			}
+		}
+		closedir(dir);
+	} else {
+		fprintf(stderr, "%s ", path);
+		perror("failed");
+		return EX_IOERR;
+	}
+	return EX_OK;
+}
 
 
 /*

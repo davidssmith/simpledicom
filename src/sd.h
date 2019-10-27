@@ -1,5 +1,8 @@
 #pragma once
+#define _GNU_SOURCE
 #include <assert.h>
+#include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <stdbool.h>
@@ -11,6 +14,7 @@
 #include <sys/stat.h>
 #include <sysexits.h>
 #include <unistd.h>
+
 #include "dict.h"
 
 
