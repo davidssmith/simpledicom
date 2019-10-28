@@ -14,8 +14,6 @@ static char *keyword_to_print = NULL;
 static bool done = false;
 //static bool bigendian = false;
 //static bool in_metadata = true;
-//
-//
 
 int
 is_dir (const char *path)
@@ -26,7 +24,7 @@ is_dir (const char *path)
 }
 
 int
-dirwalk (char *path, int (*func)(const char *path))
+dirwalk (char *path, int (*func)(char *path))
 {
 	char *entpath; // TODO: put on stack
 	struct dirent *ent;
@@ -40,11 +38,11 @@ dirwalk (char *path, int (*func)(const char *path))
 				return EX_OSERR;
 			}
 			if (is_dir(entpath)) {
-				printf("DIR: %s\n", ent->d_name);
+				//printf("=== CD %s\n", entpath);
 				dirwalk(entpath, func);
 			} else {
-				printf("FILE: %s\n", ent->d_name);
-				(*func)(ent->d_name);
+				//printf("=== PARSE %s\n", entpath);
+				(*func)(entpath);
 			}
 		}
 		closedir(dir);
@@ -213,6 +211,13 @@ bool is_private (const uint32_t tag) {
 	return grp(tag) % 2 == 1; 
 }
 
+bool 
+is_dicom (char *data) {
+	return data[128] == 'D' && data[129] == 'I' && 
+		data[130] == 'C' && data[131] == 'M';
+}
+
+
 void
 print_data_element (char* const data, const uint32_t tag,
 		const uint16_t VR, const uint32_t length, const int level)
@@ -223,7 +228,8 @@ print_data_element (char* const data, const uint32_t tag,
 		return;
 
 	if (keyword_to_print != NULL) {
-	   if (!strcmp(keyword_to_print, keyword)) {
+		//printf("[%s]\n", keyword_to_print);
+	   if (!strncmp(keyword_to_print, keyword, strlen(keyword))) {
 			done = true;
 	   } else {
 		   return;
@@ -302,6 +308,7 @@ parse_sequence (char *cursor, const uint32_t size, const int level)
 char *
 parse_data_set (char *cursor, const size_t size, const int level)
 {
+	//printf("dataset: size=%lu, level=%d\n", size, level);
 	for (const char *const start = cursor; cursor < start + size; )
 	{
 		uint32_t tag = pop_u32(&cursor);
@@ -356,10 +363,13 @@ parse_dicom_file (char *filename)
 	assert(data != MAP_FAILED);
 	madvise(data, filesize, MADV_SEQUENTIAL | MADV_WILLNEED); 
 
-	//int zero_header_length = 132;
-	int level = 0;  // top level
-	char *ret = parse_data_set(data + 132, filesize - 132, level); // skip zero region
-
+	char *ret = NULL;
+	if (is_dicom(data)) {
+		int level = 0;  // top level
+		int preamble = 132;
+		done = false;
+		ret = parse_data_set(data + preamble, filesize - preamble, level);
+	}
     assert(munmap(data, filesize) == 0);
 	close(fd);
 	if (ret == NULL)
@@ -394,7 +404,12 @@ main (int argc, char *const argv[])
 	while ((c = getopt (argc, argv, "hk:l:pt:")) != -1) {
 		switch (c) {
 			case 'k':
-				keyword_to_print = optarg;
+				keyword_to_print = malloc(128);
+				assert(keyword_to_print != NULL);
+				strncpy(keyword_to_print, optarg, 128);
+				keyword_to_print[127] = '\0'; /* to ensure null termination */
+				//keyword_to_print = optarg;
+				printf("Print only [%s]\n", keyword_to_print);
 				break;
 			case 'l':
 				max_level = atoi(optarg);
@@ -416,12 +431,11 @@ main (int argc, char *const argv[])
 
 	//sort_dict(); // if dict not already sorted
 
-	if S_ISREG(path_stat.st_mode) {
-		int ret = parse_dicom_file(argv[optind]);
-		return ret;
+	if S_ISREG(path_stat.st_mode) { /* single file, just parse and quit */
+		return parse_dicom_file(argv[optind]);
 	} else {
-		fprintf(stderr, "Directory parsing not implemented yet.\n");
-		return EX_USAGE;
+		dirwalk(path, parse_dicom_file); /* directory, so walk and parse */
+		return EX_OK;
 	}
 }
 
