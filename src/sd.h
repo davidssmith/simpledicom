@@ -85,6 +85,29 @@
 #endif
 
 
+#define COLOR_RED "\033[0;31m"
+#define COLOR_BOLDRED "\033[1;31m"
+#define COLOR_GREEN "\033[0;32m"
+#define COLOR_BOLDGREEN "\033[1;32m"
+#define COLOR_YELLOW "\033[0;33m"
+#define COLOR_BOLDYELLOW "\033[01;33m"
+#define COLOR_BLUE "\033[0;34m"
+#define COLOR_BOLDBLUE "\033[1;34m"
+#define COLOR_MAGENTA "\033[0;35m"
+#define COLOR_BOLDMAGENTA "\033[1;35m"
+#define COLOR_CYAN "\033[0;36m"
+#define COLOR_BOLDCYAN "\033[1;36m"
+#define COLOR_WHITE "\033[0;37m"
+#define COLOR_BOLDWHITE "\033[1;37m"
+#define COLOR_RESET "\033[0m"
+#define COLOR_GRAY "\033[0;90m"
+
+
+#define COLOR1 COLOR_BLUE
+#define COLOR2 COLOR_GREEN
+#define COLOR3 COLOR_MAGENTA
+#define COLOR4 COLOR_RED
+
 //typedef uint16_t u16;
 //typedef uint32_t u32;
 

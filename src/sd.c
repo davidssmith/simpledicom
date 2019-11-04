@@ -25,6 +25,7 @@ static bool implicit_syntax = true; // ImplicitVRLittleEndian is default
 static int max_level = 100;
 static int max_dir_depth = 100;
 static bool skim_leaves = false; // if true, read just one file in each leaf dir
+static bool use_color = false;
 static char *keyword_to_print = NULL;
 static bool done = false;
 static int64_t file_size = 0;
@@ -48,8 +49,6 @@ die_if_func (const int condition, const char *msg, const int line)
 #define validate_pointer(p) \
 	die_if(p < file_start || p > file_start + file_size,\
 			"invalid file pointer");
-
-
 
 
 int
@@ -273,10 +272,21 @@ print_data_element (char* const data, const uint32_t tag,
 	} else {
 		if (level > 0)
 			printf("%*s", 4*level, " ");
-		printf("(%04x,%04x) %c%c %-*s %6d [", grp(tag), ele(tag), char1(VR), char2(VR),
-			36-4*level, keyword != NULL ? keyword : "Private", length);
+		if (use_color && VR == VR_SQ)
+			printf("%s(%04x,%04x) %s%c%c%s %-*s %s%6d%s [", COLOR1, grp(tag), ele(tag), 
+					COLOR2, char1(VR), char2(VR), COLOR_GRAY, 36-4*level,
+					keyword != NULL ? keyword : "Private", COLOR3, length, COLOR_RESET);
+		else if (use_color)
+			printf("%s(%04x,%04x) %s%c%c%s %-*s %s%6d%s [", COLOR1, grp(tag), ele(tag), 
+					COLOR2, char1(VR), char2(VR), COLOR_WHITE, 36-4*level,
+					keyword != NULL ? keyword : "Private", COLOR3, length, COLOR_RESET);
+		else
+			printf("(%04x,%04x) %c%c %-*s %6d [", grp(tag), ele(tag), char1(VR), char2(VR),
+				36-4*level, keyword != NULL ? keyword : "Private", length);
 	}
 	uint32_t m = length > 6 ? 6 : length;
+	if (use_color)
+		printf("%s", COLOR4);
 	if (VR == VR_SQ)
 		goto done;
 	else if (VR == VR_FD) // moved up due to frequency
@@ -313,6 +323,8 @@ print_data_element (char* const data, const uint32_t tag,
 	if (is_vector(VR) && length > m)
 		printf("...");
 done:
+	if (use_color)
+		printf("%s", COLOR_RESET);
 	keyword_to_print == NULL ?  printf("]\n") : printf("\n");
 }
 
@@ -441,8 +453,11 @@ main (int argc, char *const argv[])
     extern int optind, opterr, optopt;
 	opterr = 0;
 	int c;
-	while ((c = getopt (argc, argv, "d:hk:l:pst:")) != -1) {
+	while ((c = getopt (argc, argv, "cd:hk:l:pst:")) != -1) {
 		switch (c) {
+			case 'c':
+				use_color = true;
+				break;
 			case 'd':
 				max_dir_depth = atoi(optarg);
 				break;
@@ -452,7 +467,6 @@ main (int argc, char *const argv[])
 				strncpy(keyword_to_print, optarg, 128);
 				keyword_to_print[127] = '\0'; /* to ensure null termination */
 				//keyword_to_print = optarg;
-				printf("Print only [%s]\n", keyword_to_print);
 				break;
 			case 'l':
 				max_level = atoi(optarg);
