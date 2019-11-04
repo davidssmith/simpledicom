@@ -35,11 +35,21 @@ static char *file_path = NULL;
 
 
 void
-validate_pointer (const char *p)
+die_if_func (const int condition, const char *msg, const int line)
 {
-	assert(file_start <= p);
-	assert(p <= file_start + file_size);
+	if (condition) {
+		fprintf(stderr, "[%s: line %d] %s\n", file_path, line, msg);
+		raise(SIGINT);
+	}
 }
+
+#define die_if(cond,msg) die_if_func(cond,msg,__LINE__)
+
+#define validate_pointer(p) \
+	die_if(p < file_start || p > file_start + file_size,\
+			"invalid file pointer");
+
+
 
 
 int
@@ -58,30 +68,25 @@ dirwalk (char *path, int (*func)(char *path), const int depth)
 	DIR *dir = opendir(path);
 	bool skimmed = false;
 
-	if (dir != NULL) {
-		while((ent = readdir(dir)) != NULL) {
-			if (strncmp(ent->d_name, ".", 1) == 0 || strncmp(ent->d_name, "..", 2) == 0)
-				continue;
-			if (asprintf(&entpath, "%s/%s", path, ent->d_name) == -1) {
-				return EX_OSERR;
-			}
-			if (is_dir(entpath) && depth < max_dir_depth) {
-				//printf("=== CD %s\n", entpath);
-				dirwalk(entpath, func, depth + 1);
-			} else if (!skimmed) {
-				//printf("=== PARSE %s\n", entpath);
-				//fprintf(stderr, "%d\r", nread++);
-				(*func)(entpath);
-				if (skim_leaves && depth == max_dir_depth)
-					skimmed = true;
-			}
+	die_if(dir == NULL, "failed to open dir");
+	while((ent = readdir(dir)) != NULL) {
+		if (strncmp(ent->d_name, ".", 1) == 0 || strncmp(ent->d_name, "..", 2) == 0)
+			continue;
+		if (asprintf(&entpath, "%s/%s", path, ent->d_name) == -1) {
+			return EX_OSERR;
 		}
-		closedir(dir);
-	} else {
-		fprintf(stderr, "%s ", path);
-		perror("failed");
-		return EX_IOERR;
+		if (is_dir(entpath) && depth < max_dir_depth) {
+			//printf("=== CD %s\n", entpath);
+			dirwalk(entpath, func, depth + 1);
+		} else if (!skimmed) {
+			//printf("=== PARSE %s\n", entpath);
+			//fprintf(stderr, "%d\r", nread++);
+			(*func)(entpath);
+			if (skim_leaves && depth == max_dir_depth)
+				skimmed = true;
+		}
 	}
+	closedir(dir);
 	return EX_OK;
 }
 
@@ -327,7 +332,7 @@ parse_sequence (char *cursor, const uint32_t size, const int level)
 			uint32_t length = pop_u32(&cursor);
 			cursor = parse_data_set(cursor, length, level + 1);
 		} else {
-			fprintf(stderr, "[%s:%ld] found tag %08x instead of ItemDelim %08x\n",
+			fprintf(stderr, "[%s: offset %ld] found tag %08x instead of ItemDelim %08x\n",
 					file_path, cursor-file_start, tag, ITEM_START);
 			done = true;
 			return NULL;
@@ -395,7 +400,7 @@ parse_dicom_file (char *filename)
 	file_size = st.st_size;
 
 	char *data = mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	assert(data != MAP_FAILED);
+	die_if(data == MAP_FAILED, "mmap failed");
 	madvise(data, file_size, MADV_SEQUENTIAL | MADV_WILLNEED);
 	file_start = data;
 
@@ -407,7 +412,7 @@ parse_dicom_file (char *filename)
 		implicit_syntax = true; // reset defaults
 		ret = parse_data_set(data + preamble, file_size - preamble, level);
 	}
-    assert(munmap(data, file_size) == 0);
+    die_if(munmap(data, file_size) != 0, "munmap failed");
 	close(fd);
 	if (ret == NULL)
 		return EX_DATAERR;
@@ -443,7 +448,7 @@ main (int argc, char *const argv[])
 				break;
 			case 'k':
 				keyword_to_print = malloc(128);
-				assert(keyword_to_print != NULL);
+				die_if(keyword_to_print == NULL, "malloc for keyword_to_print failed");
 				strncpy(keyword_to_print, optarg, 128);
 				keyword_to_print[127] = '\0'; /* to ensure null termination */
 				//keyword_to_print = optarg;
