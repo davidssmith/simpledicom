@@ -1,6 +1,7 @@
 #pragma once
 #define _GNU_SOURCE
 #include <assert.h>
+#include <byteswap.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -92,7 +93,6 @@ union tag {
 	struct { uint16_t g, e; };
 };
 */
-
 
 const uint32_t ITEM_START    = 0xe000fffe;
 const uint32_t ITEM_STOP  = 0xe00dfffe;
