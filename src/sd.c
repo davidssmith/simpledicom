@@ -438,6 +438,7 @@ print_usage()
 {
 	fprintf(stderr, "Stream DICOM parser and manipulator\n");
 	fprintf(stderr, "sd [-hp] [-k keyword] [-l n] <dicomfile>\n");
+	fprintf(stderr, "\t-c\t\tprint with color\n");
 	fprintf(stderr, "\t-d depth\tmax depth to search\n");
 	fprintf(stderr, "\t-h\t\tthis help\n");
 	fprintf(stderr, "\t-k keyword\tprint single keyword\n");
