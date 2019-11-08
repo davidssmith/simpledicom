@@ -19,14 +19,17 @@ enum SYNTAX {
 };
 
 
+// GLOBAL PARAMETERS
 static bool hide_private = false;
 static int nthreads = 1;
-static bool implicit_syntax = true; // ImplicitVRLittleEndian is default
 static int max_level = 100;
 static int max_dir_depth = 100;
 static bool skim_leaves = false; // if true, read just one file in each leaf dir
 static bool use_color = false;
 static char *keyword_to_print = NULL;
+
+// INTERNAL USE GLOBALS
+static bool implicit_syntax = true; // ImplicitVRLittleEndian is default
 static bool done = false;
 static int64_t file_size = 0;
 static char *file_start = NULL;
@@ -91,7 +94,6 @@ dirwalk (char *path, int (*func)(char *path), const int depth)
 
 
 /*
-
 static int
 compdict(void * const l, void * const r)
 {
@@ -104,14 +106,14 @@ compdict(void * const l, void * const r)
 	else
 		return 0;
 }
-
 void
 sort_dict ()
 {
 	qsort((void*)dict, DICTSIZE, sizeof(struct Tag), compdict);
 }
+*/
 
-
+/*
 char *
 dict_lookup_keyword (const uint32_t tag) 
 {
@@ -131,12 +133,14 @@ vr_from_string (const char* s) // convert from 2-char str
 int
 dict_lookup (const uint32_t tag)
 {
+	uint32_t t = (tag >> 16) | ((tag & 0xffff) << 16);
+	// TODO: eliminate after new dict generated
 	for (int min = 0, max = DICTSIZE; max - min > 1; )
 	{
 		int i = (min + max) / 2;
-		if (tag < dict[i].tag)
+		if (t < dict[i].tag)
 			max = i;
-		else if (tag > dict[i].tag)
+		else if (t > dict[i].tag)
 			min = i;
 		else
 			return i;
@@ -203,17 +207,8 @@ print_vr_magics ()
 }
 #endif
 
-char
-char2 (uint16_t n)
-{
-	return (char)(n >> 8);
-}
-
-char
-char1 (uint16_t n)
-{
-	return (char)(n & 0xff);
-}
+char char2 (uint16_t VR) { return (char)(VR >> 8); }
+char char1 (uint16_t VR) { return (char)(VR & 0xff); }
 
 bool
 is_big (const uint16_t VR)
@@ -222,29 +217,11 @@ is_big (const uint16_t VR)
 	return VR == VR_SQ || char1(VR) == 'O' || VR == VR_UN || VR == VR_UT;
 }
 
-bool
-is_vector (const uint16_t VR)
-{
-	return char1(VR) == 'O';
-}
-
-bool
-is_sequence (const uint16_t VR) {
-	return VR == VR_SQ;
-}
-
-
-uint16_t grp (const uint32_t tag) {
-	return tag >> 16;
-}
-
-uint16_t ele (const uint32_t tag) {
-	return tag & 0xffff;
-}
-
-bool is_private (const uint32_t tag) {
-	return grp(tag) % 2 == 1;
-}
+bool is_vector (const uint16_t VR) { return char1(VR) == 'O'; }
+bool is_sequence (const uint16_t VR) { return VR == VR_SQ; } 
+uint16_t ele (const uint32_t tag) { return tag >> 16; }
+uint16_t grp (const uint32_t tag) { return tag & 0xffff; }
+bool is_private (const uint32_t tag) { return grp(tag) % 2 == 1; }
 
 bool
 is_dicom (char *data) {
@@ -254,8 +231,8 @@ is_dicom (char *data) {
 
 
 void
-print_data_element (char* const data, const uint32_t tag,
-		const uint16_t VR, const uint32_t length, const int level)
+print_data_element (char *data, const uint32_t tag, const uint16_t VR, 
+	const uint32_t length, const int level)
 {
 	char *keyword = dict_keyword(tag);
 	if (level >= max_level ||
@@ -370,7 +347,7 @@ parse_data_set (char *cursor, const size_t size, const int level)
 		if (size == SIZE_UNDEFINED && tag == ITEM_STOP)
 			return cursor + 4;
 
-		tag = grp(tag) | ele(tag) << 16; // swap for little endian
+		//tag = grp(tag) | ele(tag) << 16; // swap for little endian
 
 		if (grp(tag) <= METADATA_GROUP || !implicit_syntax) {
 			VR = pop_u16(&cursor);
@@ -379,13 +356,14 @@ parse_data_set (char *cursor, const size_t size, const int level)
 				length = pop_u32(&cursor);
 			} else
 				length = pop_u16(&cursor);
-			if (tag == 0x00020010 && strncmp(cursor, "1.2.840.10008.1.2", length) != 0)
+			if (tag == 0x00100002 && strncmp(cursor, "1.2.840.10008.1.2", length) != 0)
 					implicit_syntax = false;
 		} else {
 			length = pop_u32(&cursor);
 			VR = dict_VR(tag);
 		}
-
+		//DataElement e = { .tag.u32 = tag, .VR.u16 = VR, .length = length, .data = cursor };
+		//print_data_element(&e, level);
 		print_data_element(cursor, tag, VR, length, level);
 
 		if (is_sequence(VR) && !is_private(tag))
@@ -487,7 +465,7 @@ main (int argc, char *const argv[])
 				return EX_USAGE;
 		}
 	}
-	if (!optind) {
+	if (argc < 1) {
 		print_usage();
 		return EX_USAGE;
 	}
@@ -495,7 +473,7 @@ main (int argc, char *const argv[])
 	struct stat path_stat;
 	stat(file_path, &path_stat);
 
-	//sort_dict(); // if dict not already sorted
+//	sort_dict(); // if dict not already sorted
 
 	if S_ISREG(path_stat.st_mode) { /* single file, just parse and quit */
 		return parse_dicom_file(file_path);

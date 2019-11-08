@@ -111,16 +111,22 @@
 //typedef uint16_t u16;
 //typedef uint32_t u32;
 
-/*
-union tag {
-	uint32_t tag;
-	struct { uint16_t g, e; };
-};
-*/
+typedef struct {
+	union {
+		uint32_t u32;
+		struct 	{ uint16_t grp, ele; };
+	} tag;
+	union {
+		uint16_t u16;
+		char c[2];
+	} VR;
+	uint32_t length;
+	char *data;
+} DataElement;
 
-const uint32_t ITEM_START    = 0xe000fffe;
-const uint32_t ITEM_STOP  = 0xe00dfffe;
-const uint32_t SEQ_STOP   = 0xe0ddfffe;
+const uint32_t ITEM_START = 0xe000fffe;
+const uint32_t ITEM_STOP = 0xe00dfffe;
+const uint32_t SEQ_STOP = 0xe0ddfffe;
 const uint32_t SIZE_UNDEFINED = 0xffffffff;
 const uint32_t METADATA_GROUP = 0x0002;
 
