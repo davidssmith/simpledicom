@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <byteswap.h>
 #include <dirent.h>
+#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -103,10 +104,10 @@
 #define COLOR_GRAY "\033[0;90m"
 
 
-#define COLOR1 COLOR_BLUE
-#define COLOR2 COLOR_GREEN
+#define COLOR1 COLOR_GREEN
+#define COLOR2 COLOR_BLUE
 #define COLOR3 COLOR_MAGENTA
-#define COLOR4 COLOR_RED
+#define COLOR4 COLOR_BOLDWHITE
 
 //typedef uint16_t u16;
 //typedef uint32_t u32;

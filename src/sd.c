@@ -63,6 +63,15 @@ is_dir (const char *path)
 }
 
 int
+is_file (const char *path) 
+{
+	struct stat s;
+	stat(path, &s);
+	return S_ISREG(s.st_mode);
+}
+
+
+int
 dirwalk (char *path, int (*func)(char *path), const int depth)
 {
 	char *entpath; // TODO: put on stack
@@ -80,14 +89,18 @@ dirwalk (char *path, int (*func)(char *path), const int depth)
 		if (is_dir(entpath) && depth < max_dir_depth) {
 			//printf("=== CD %s\n", entpath);
 			dirwalk(entpath, func, depth + 1);
-		} else if (!skimmed) {
+		} else if (is_file(path) && !skimmed) {
 			//printf("=== PARSE %s\n", entpath);
 			//fprintf(stderr, "%d\r", nread++);
 			(*func)(entpath);
 			if (skim_leaves && depth == max_dir_depth)
 				skimmed = true;
+		} else {
+			err(EX_IOERR, "Path [%s] not file or directory", path);
 		}
+
 	}
+
 	closedir(dir);
 	return EX_OK;
 }
@@ -470,12 +483,10 @@ main (int argc, char *const argv[])
 		return EX_USAGE;
 	}
 	file_path = argv[optind];
-	struct stat path_stat;
-	stat(file_path, &path_stat);
 
 //	sort_dict(); // if dict not already sorted
 
-	if S_ISREG(path_stat.st_mode) { /* single file, just parse and quit */
+	if (!is_dir(file_path)) { /* single file, just parse and quit */
 		return parse_dicom_file(file_path);
 	} else {
 		dirwalk(file_path, parse_dicom_file, 0); /* directory, so walk and parse */
