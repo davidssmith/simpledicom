@@ -252,6 +252,7 @@ print_data_element (char *data, const uint32_t tag, const uint16_t VR,
 		(hide_private && (keyword == NULL || is_private(tag))))
 		return;
 
+	printf("%06lx: ", data-file_start);
 	if (keyword_to_print != NULL) {
 		//printf("[%s]\n", keyword_to_print);
 	   if (!strncmp(keyword_to_print, keyword, strlen(keyword))) {
