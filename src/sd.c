@@ -34,6 +34,9 @@ static bool done = false;
 static int64_t file_size = 0;
 static char *file_start = NULL;
 static char *file_path = NULL;
+static char *file_meta_start = NULL;
+static bool seen_meta = false;
+static size_t meta_group_length = 0;
 //static bool bigendian = false;
 //static bool in_metadata = true;
 
@@ -379,6 +382,17 @@ parse_data_set (char *cursor, const size_t size, const int level)
 		//DataElement e = { .tag.u32 = tag, .VR.u16 = VR, .length = length, .data = cursor };
 		//print_data_element(&e, level);
 		print_data_element(cursor, tag, VR, length, level);
+
+		if (grp(tag) == 2 && !seen_meta)  {
+			seen_meta = true;
+			file_meta_start = (char*)(cursor - file_start + length);
+			//printf("File Meta Start: %llx\n", file_meta_start);
+		} else if (meta_group_length == 0 && grp(tag) > 2 && seen_meta) {
+			char* file_meta_end = (char*)(cursor - file_start);
+			//printf("File Meta End: %llx\n", file_meta_end);
+			meta_group_length = (size_t)(file_meta_end - file_meta_start - 8) ; // HACK! no idea why off by 8
+			//printf("File Meta Length: %lu\n", meta_group_length);
+		}
 
 		if (is_sequence(VR) && !is_private(tag))
 			cursor = parse_sequence(cursor, length, level);
