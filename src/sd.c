@@ -21,7 +21,7 @@ enum SYNTAX {
 
 // GLOBAL PARAMETERS
 static bool hide_private = false;
-static int nthreads = 1;
+static uint32_t target_tag = 0xffffffff;
 static int max_level = 100;
 static int max_dir_depth = 100;
 static bool skim_leaves = false; // if true, read just one file in each leaf dir
@@ -35,6 +35,8 @@ static int64_t file_size = 0;
 static char *file_start = NULL;
 static char *file_path = NULL;
 static char *file_meta_start = NULL;
+static char *outfile_name = NULL;
+static FILE *outfp;
 static bool seen_meta = false;
 static size_t meta_group_length = 0;
 //static bool bigendian = false;
@@ -381,6 +383,10 @@ parse_data_set (char *cursor, const size_t size, const int level)
 		}
 		//DataElement e = { .tag.u32 = tag, .VR.u16 = VR, .length = length, .data = cursor };
 		//print_data_element(&e, level);
+		if (tag == target_tag) {
+			printf("=== TARGET ===\n");
+			printf("[%s]\n", cursor);
+		}
 		print_data_element(cursor, tag, VR, length, level);
 
 		if (grp(tag) == 2 && !seen_meta)  {
@@ -430,7 +436,7 @@ parse_dicom_file (char *filename)
 		implicit_syntax = true; // reset defaults
 		ret = parse_data_set(data + preamble, file_size - preamble, level);
 	}
-    die_if(munmap(data, file_size) != 0, "munmap failed");
+	die_if(munmap(data, file_size) != 0, "munmap failed");
 	close(fd);
 	if (ret == NULL)
 		return EX_DATAERR;
@@ -457,7 +463,7 @@ int
 main (int argc, char *const argv[])
 {
 	extern char *optarg;
-    extern int optind, opterr, optopt;
+	extern int optind, opterr, optopt;
 	opterr = 0;
 	int c;
 	while ((c = getopt (argc, argv, "cd:hk:l:pst:")) != -1) {
@@ -485,7 +491,11 @@ main (int argc, char *const argv[])
 				skim_leaves = true;
 				break;
 			case 't':
-				nthreads = atoi(optarg);
+				target_tag = strtoul(optarg, NULL, 16);
+				target_tag = (target_tag >> 16) | ((target_tag & 0xffff) << 16);
+				break;
+			case 'o':
+				outfile_name = optarg;
 				break;
 			case 'h':
 			default:
@@ -498,6 +508,11 @@ main (int argc, char *const argv[])
 		return EX_USAGE;
 	}
 	file_path = argv[optind];
+
+	if (outfile_name != NULL)
+		outfp = fopen(outfile_name, "w");
+	else
+		outfp = stdout;
 
 //	sort_dict(); // if dict not already sorted
 

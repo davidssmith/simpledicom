@@ -1,4 +1,5 @@
-CC=clang-8
+CC=clang
+#CC=clang-8
 #CC=gcc-7
 #CFLAGS=-march=native -Wall -g -O2 -fstrict-aliasing -Wcast-qual -fno-exceptions -std=c99 -pedantic -Wextra -Wshadow
 CFLAGS=-march=native -Wall -ggdb -O2 -g -Wcast-qual -std=c11 -pedantic -Wextra -Wshadow
